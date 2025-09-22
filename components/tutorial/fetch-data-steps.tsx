@@ -76,7 +76,7 @@ export function FetchDataSteps() {
           </a>{" "}
           and click RUN!
         </p>
-        <CodeBlock code={create} />
+        {/* <CodeBlock code={create} /> */}
       </TutorialStep>
 
       <TutorialStep title="Enable Row Level Security (RLS)">
