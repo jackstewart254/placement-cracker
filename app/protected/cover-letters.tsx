@@ -8,13 +8,13 @@ import { Button } from "@/components/ui/button";
 import { DataTable } from "./data-table";
 import { getColumns, UnifiedCoverLetter } from "./columns";
 
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+// import {
+//   Dialog,
+//   DialogContent,
+//   DialogDescription,
+//   DialogHeader,
+//   DialogTitle,
+// } from "@/components/ui/dialog";
 
 // ✅ Define the type for the raw response from Supabase
 type RawCoverLetter = {
@@ -224,13 +224,13 @@ export default function CoverLetters() {
         />
       </div>
 
-      <Dialog
+      {/* <Dialog
         open={!!openLetter}
         onOpenChange={(open) => {
           if (!open) setOpenLetter(null);
         }}
       >
-        <DialogContent className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-4xl h-[80vh] flex flex-col overflow-auto">
+        <DialogContent className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-5xl h-[80vh] flex flex-col overflow-auto">
           <DialogHeader>
             <DialogTitle>{openLetter?.job_title}</DialogTitle>
             <DialogDescription>{openLetter?.company_name}</DialogDescription>
@@ -239,7 +239,7 @@ export default function CoverLetters() {
             {openLetter?.cover_letter}
           </div>
         </DialogContent>
-      </Dialog>
+      </Dialog> */}
     </div>
   );
 }

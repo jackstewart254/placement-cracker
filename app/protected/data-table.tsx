@@ -14,7 +14,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Unified  CoverLetter } from "./columns";
+
+import { UnifiedCoverLetter } from "./columns";
 
 interface DataTableProps {
   data: UnifiedCoverLetter[];
