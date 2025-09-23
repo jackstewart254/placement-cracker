@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { UserInformation } from "@/types/userInformation";
 
@@ -26,48 +26,58 @@ export default function MetaInformation() {
     personal_projects: "",
   });
 
+  // Refs for each textarea
+  const technicalSkillsRef = useRef<HTMLTextAreaElement | null>(null);
+  const softSkillsRef = useRef<HTMLTextAreaElement | null>(null);
+  const extraCurricularsRef = useRef<HTMLTextAreaElement | null>(null);
+  const personalProjectsRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // Helper to auto-resize textarea
+  const autoResize = (element: HTMLTextAreaElement) => {
+    if (!element) return;
+    element.style.height = "auto"; // Reset
+    element.style.height = `${element.scrollHeight}px`; // Fit content
+  };
+
   // Regex validation rules
   const regexRules = {
     technical_skills: /^([A-Za-z0-9\s.+/()\-]+)(,\s*[A-Za-z0-9\s.+/()\-]+)*$/,
-    soft_skills: /^([A-Za-z\s]+)(,\s*[A-Za-z\s]+)*$/, // Comma-separated soft skills
+    soft_skills: /^([A-Za-z\s\-.]+)(,\s*[A-Za-z\s\-.]+)*$/,
     extra_curriculars: /^.{10,}$/, // Minimum 10 characters
     personal_projects: /^([^\n]{5,})(\r?\n[^\n]{5,})*$/,
   };
 
-const validateField = (field: keyof UserInformation, value: string) => {
-  let errorMessage = "";
+  const validateField = (field: keyof UserInformation, value: string) => {
+    let errorMessage = "";
 
-  // Only validate if the field has a regex rule
-  if (!regexRules[field]) {
-    return true; // Skip validation for unknown fields
-  }
+    if (!regexRules[field]) return true;
 
-  if (!regexRules[field].test(value)) {
-    switch (field) {
-      case "technical_skills":
-        errorMessage =
-          "Technical skills must be comma-separated (e.g., JavaScript, CSS, HTML).";
-        break;
-      case "soft_skills":
-        errorMessage =
-          "Soft skills must be comma-separated (e.g., Communication, Teamwork).";
-        break;
-      case "extra_curriculars":
-        errorMessage = "Extra Curriculars must be at least 10 characters long.";
-        break;
-      case "personal_projects":
-        errorMessage =
-          "Each project must be on a new line and at least 5 characters long.";
-        break;
+    if (!regexRules[field].test(value)) {
+      switch (field) {
+        case "technical_skills":
+          errorMessage =
+            "Technical skills must be comma-separated (e.g., JavaScript, CSS, HTML).";
+          break;
+        case "soft_skills":
+          errorMessage =
+            "Soft skills must be comma-separated (e.g., Communication, Teamwork).";
+          break;
+        case "extra_curriculars":
+          errorMessage =
+            "Extra Curriculars must be at least 10 characters long.";
+          break;
+        case "personal_projects":
+          errorMessage =
+            "Each project must be on a new line and at least 5 characters long.";
+          break;
+      }
     }
-  }
 
-  setErrors((prev) => ({ ...prev, [field]: errorMessage }));
-  return errorMessage === "";
-};
+    setErrors((prev) => ({ ...prev, [field]: errorMessage }));
+    return errorMessage === "";
+  };
 
-
-  // Fetch user's information
+  // Fetch user data
   useEffect(() => {
     const fetchUserInfo = async () => {
       setLoading(true);
@@ -86,7 +96,6 @@ const validateField = (field: keyof UserInformation, value: string) => {
         return;
       }
 
-      // Fetch user info from the table
       const { data, error } = await supabase
         .from("user_information")
         .select("*")
@@ -97,33 +106,39 @@ const validateField = (field: keyof UserInformation, value: string) => {
         console.error("Error fetching user info:", error.message);
       }
 
-      if (data) {
-        setUserInfo(data);
-        setOriginalUserInfo(data);
-      } else {
-        const initialData = { ...userInfo, user_id: user.id };
-        setUserInfo(initialData);
-        setOriginalUserInfo(initialData);
-      }
+      const loadedData = data || { ...userInfo, user_id: user.id };
+      setUserInfo(loadedData);
+      setOriginalUserInfo(loadedData);
 
       setLoading(false);
     };
 
     fetchUserInfo();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase]);
+  }, []);
 
-  // Handle changes to fields and track dirty state
-  const handleChange = (field: keyof UserInformation, value: string) => {
+  // 🔹 Run autoResize AFTER userInfo loads
+  useEffect(() => {
+    if (technicalSkillsRef.current) autoResize(technicalSkillsRef.current);
+    if (softSkillsRef.current) autoResize(softSkillsRef.current);
+    if (extraCurricularsRef.current) autoResize(extraCurricularsRef.current);
+    if (personalProjectsRef.current) autoResize(personalProjectsRef.current);
+  }, [userInfo]); // Re-run whenever data changes
+
+  // Handle changes to fields
+  const handleChange = (
+    field: keyof UserInformation,
+    value: string,
+    element?: HTMLTextAreaElement
+  ) => {
     const updatedUserInfo = { ...userInfo, [field]: value };
     setUserInfo(updatedUserInfo);
 
-    // Check if data has changed compared to the original
+    if (element) autoResize(element);
+
     setIsDirty(
       JSON.stringify(updatedUserInfo) !== JSON.stringify(originalUserInfo)
     );
-
-    // Validate the specific field
     validateField(field, value);
   };
 
@@ -137,7 +152,6 @@ const validateField = (field: keyof UserInformation, value: string) => {
       return;
     }
 
-    // Validate all fields before saving
     const isValid = (Object.keys(userInfo) as (keyof UserInformation)[]).every(
       (field) => validateField(field, userInfo[field])
     );
@@ -171,10 +185,17 @@ const validateField = (field: keyof UserInformation, value: string) => {
       {/* Technical Skills */}
       <div>
         <textarea
+          ref={technicalSkillsRef}
           placeholder="Technical Skills (comma-separated)"
           value={userInfo.technical_skills}
-          onChange={(e) => handleChange("technical_skills", e.target.value)}
-          className={`bg-accent text-sm p-3 px-5 rounded-md text-foreground w-full ${
+          onInput={(e) =>
+            handleChange(
+              "technical_skills",
+              e.currentTarget.value,
+              e.currentTarget
+            )
+          }
+          className={`bg-accent text-sm p-3 px-5 rounded-md text-foreground w-full resize-none overflow-hidden ${
             errors.technical_skills ? "border border-red-500" : ""
           }`}
         />
@@ -186,10 +207,13 @@ const validateField = (field: keyof UserInformation, value: string) => {
       {/* Soft Skills */}
       <div>
         <textarea
+          ref={softSkillsRef}
           placeholder="Soft Skills (comma-separated)"
           value={userInfo.soft_skills}
-          onChange={(e) => handleChange("soft_skills", e.target.value)}
-          className={`bg-accent text-sm p-3 px-5 rounded-md text-foreground w-full ${
+          onInput={(e) =>
+            handleChange("soft_skills", e.currentTarget.value, e.currentTarget)
+          }
+          className={`bg-accent text-sm p-3 px-5 rounded-md text-foreground w-full resize-none overflow-hidden ${
             errors.soft_skills ? "border border-red-500" : ""
           }`}
         />
@@ -201,10 +225,17 @@ const validateField = (field: keyof UserInformation, value: string) => {
       {/* Extra Curriculars */}
       <div>
         <textarea
+          ref={extraCurricularsRef}
           placeholder="Extra Curriculars (minimum 10 characters)"
           value={userInfo.extra_curriculars}
-          onChange={(e) => handleChange("extra_curriculars", e.target.value)}
-          className={`bg-accent text-sm p-3 px-5 rounded-md text-foreground w-full ${
+          onInput={(e) =>
+            handleChange(
+              "extra_curriculars",
+              e.currentTarget.value,
+              e.currentTarget
+            )
+          }
+          className={`bg-accent text-sm p-3 px-5 rounded-md text-foreground w-full resize-none overflow-hidden ${
             errors.extra_curriculars ? "border border-red-500" : ""
           }`}
         />
@@ -218,10 +249,17 @@ const validateField = (field: keyof UserInformation, value: string) => {
       {/* Personal Projects */}
       <div>
         <textarea
+          ref={personalProjectsRef}
           placeholder="Personal Projects (each on a new line, minimum 5 characters)"
           value={userInfo.personal_projects}
-          onChange={(e) => handleChange("personal_projects", e.target.value)}
-          className={`bg-accent text-sm p-3 px-5 rounded-md text-foreground w-full ${
+          onInput={(e) =>
+            handleChange(
+              "personal_projects",
+              e.currentTarget.value,
+              e.currentTarget
+            )
+          }
+          className={`bg-accent text-sm p-3 px-5 rounded-md text-foreground w-full resize-none overflow-hidden ${
             errors.personal_projects ? "border border-red-500" : ""
           }`}
         />
