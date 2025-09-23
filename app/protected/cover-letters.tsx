@@ -7,6 +7,7 @@ interface CoverLetterRecord {
   jobs?: {
     job_title?: string;
     company_id?: string;
+    url?: string; // ✅ URL now included in jobs
     companies?: {
       name?: string;
     };
@@ -21,7 +22,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Loader2Icon } from "lucide-react";
 
-// ✅ Import Dialog Components from ShadCN
 import {
   Dialog,
   DialogContent,
@@ -36,6 +36,7 @@ interface AvailableJob {
   job_title: string;
   opened: string;
   company_name: string;
+  url?: string;
 }
 
 interface CoverLetter {
@@ -44,6 +45,7 @@ interface CoverLetter {
   cover_letter: string;
   job_title?: string;
   company_name?: string;
+  url?: string;
 }
 
 export default function CoverLetters() {
@@ -54,11 +56,8 @@ export default function CoverLetters() {
   const [render, setRender] = useState<boolean>(true);
   const [loading, setLoading] = useState(false);
   const [currentJob, setCurrentJob] = useState<AvailableJob | null>(null);
-  const [openLetter, setOpenLetter] = useState<CoverLetter | null>(null); // <-- State for modal
+  const [openLetter, setOpenLetter] = useState<CoverLetter | null>(null);
 
-  /**
-   * Fetch data when component mounts or render state changes
-   */
   /**
    * Fetch all cover letters for the logged-in user
    */
@@ -80,19 +79,20 @@ export default function CoverLetters() {
       .from("cover_letters")
       .select(
         `
-      id,
-      job_id,
-      cover_letter,
-      jobs (
-        job_title,
-        company_id,
-        companies (name)
-      )
-    `
+        id,
+        job_id,
+        cover_letter,
+        jobs (
+          job_title,
+          company_id,
+          url,
+          companies (name)
+        )
+      `
       )
       .eq("user_id", user.id);
 
-    const typedData = data as CoverLetterRecord[]; // ✅ Force TypeScript to treat it correctly
+    const typedData = data as CoverLetterRecord[];
 
     if (error) {
       console.error("Error fetching cover letters:", error.message);
@@ -109,6 +109,7 @@ export default function CoverLetters() {
         cover_letter: item.cover_letter,
         job_title: job?.job_title || "Untitled Job",
         company_name: company?.name || "Unknown Company",
+        url: job?.url || "",
       };
     });
 
@@ -135,7 +136,7 @@ export default function CoverLetters() {
 
       const { data: jobs, error: jobsError } = await supabase
         .from("jobs")
-        .select("id, job_title, opened, company_id");
+        .select("id, job_title, opened, company_id, url");
 
       if (jobsError) {
         console.error("Error fetching jobs:", jobsError.message);
@@ -144,18 +145,7 @@ export default function CoverLetters() {
 
       const { data: letters, error: lettersError } = await supabase
         .from("cover_letters")
-        .select(
-          `
-    id,
-    job_id,
-    cover_letter,
-    jobs (
-      job_title,
-      company_id,
-      companies (name)
-    )
-  `
-        )
+        .select("job_id")
         .eq("user_id", user.id);
 
       if (lettersError) {
@@ -198,9 +188,10 @@ export default function CoverLetters() {
 
       const available = jobsWithoutCoverLetter.map((job) => ({
         job_id: job.id,
-        job_title: job.job_title, // ✅ FIX: use job.job_title
+        job_title: job.job_title,
         opened: job.opened,
         company_name: companyMap[job.company_id] || "Unknown Company",
+        url: job.url,
       }));
 
       setAvailableJobs(available);
@@ -217,9 +208,6 @@ export default function CoverLetters() {
     }
   }, [render, fetchAvailableJobs, fetchCoverLetters]);
 
-  /**
-   * Handles checkbox toggle
-   */
   const handleCheckboxChange = (jobId: string) => {
     setSelectedJobs((prev) =>
       prev.includes(jobId)
@@ -228,9 +216,6 @@ export default function CoverLetters() {
     );
   };
 
-  /**
-   * Handles form submission
-   */
   const handleSubmit = async () => {
     if (selectedJobs.length === 0) {
       toast.error("Please select at least one job.");
@@ -242,11 +227,11 @@ export default function CoverLetters() {
     );
 
     setLoading(true);
-    setRender(false); // Switch to generated list view
+    setRender(false);
 
     try {
       for (const job of selectedJobDetails) {
-        setCurrentJob(job); // Track which job is currently being processed
+        setCurrentJob(job);
 
         const res = await fetch("/api/generate-cover-letters", {
           method: "POST",
@@ -256,7 +241,9 @@ export default function CoverLetters() {
               {
                 id: job.job_id,
                 job_title: job.job_title,
-                description: `Company: ${job.company_name}\nOpened: ${job.opened}`,
+                description: `Company: ${job.company_name}\nOpened: ${
+                  job.opened
+                }\nURL: ${job.url || "N/A"}`,
               },
             ],
             input: "Write a professional cover letter tailored to this job.",
@@ -270,7 +257,6 @@ export default function CoverLetters() {
           continue;
         }
 
-        // Add generated cover letter to the list
         setCoverLetters((prev) => [...prev, ...result.data]);
       }
 
@@ -281,13 +267,10 @@ export default function CoverLetters() {
     } finally {
       setCurrentJob(null);
       setLoading(false);
-      setSelectedJobs([]); // Reset selection
+      setSelectedJobs([]);
     }
   };
 
-  /**
-   * Available jobs with checkboxes
-   */
   const renderAvailable = () => (
     <div className="flex flex-col gap-4 w-full">
       {availableJobs.map((job) => (
@@ -308,11 +291,20 @@ export default function CoverLetters() {
               </p>
             </div>
             <p className="text-sm text-muted-foreground">{job.company_name}</p>
+            {job.url && (
+              <a
+                href={job.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-blue-500 hover:underline mt-1"
+              >
+                View Job Posting
+              </a>
+            )}
           </div>
         </div>
       ))}
 
-      {/* Show submit button only when one or more jobs are selected */}
       {selectedJobs.length > 0 && (
         <Button onClick={handleSubmit} disabled={loading}>
           {loading ? "Generating..." : "Generate Cover Letters"}
@@ -321,9 +313,6 @@ export default function CoverLetters() {
     </div>
   );
 
-  /**
-   * Render generated cover letters
-   */
   const renderCoverLetters = () => (
     <div className="flex flex-col gap-2 w-full">
       {coverLetters.map((letter) => (
@@ -340,10 +329,12 @@ export default function CoverLetters() {
               <p className="font-medium text-sm">
                 {letter.job_title} - {letter.company_name}
               </p>
+              {letter.url && (
+                <span className="text-xs text-blue-500 mt-1">{letter.url}</span>
+              )}
             </div>
           </DialogTrigger>
 
-          {/* Modal Content */}
           <DialogContent className="max-w-5xl h-[70%] overflow-auto">
             <DialogHeader>
               <DialogTitle>
@@ -353,6 +344,16 @@ export default function CoverLetters() {
                 Below is the generated cover letter for this job.
               </DialogDescription>
             </DialogHeader>
+            {letter.url && (
+              <a
+                href={letter.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-500 hover:underline mb-2 block text-sm"
+              >
+                View Job Posting
+              </a>
+            )}
             <div className="mt-4 whitespace-pre-wrap text-sm">
               {letter.cover_letter}
             </div>
@@ -372,9 +373,6 @@ export default function CoverLetters() {
     </div>
   );
 
-  /**
-   * Render empty state
-   */
   const renderEmpty = () => (
     <div className="flex items-center justify-center w-full">
       <p className="text-muted-foreground text-sm">No data available</p>
@@ -383,7 +381,6 @@ export default function CoverLetters() {
 
   return (
     <div className="flex w-full flex-col">
-      {/* Toggle between "New" and "Generated" */}
       <div className="flex flex-row mb-4">
         <Button
           variant="ghost"
@@ -401,7 +398,6 @@ export default function CoverLetters() {
         </Button>
       </div>
 
-      {/* Render either Available Jobs or Generated Cover Letters */}
       <div className="w-full min-h-[32px] flex flex-row">
         {render
           ? availableJobs.length > 0
