@@ -157,9 +157,14 @@ const PersonalInformation = () => {
       );
 
       setHasExistingRecord(true);
-    } catch (err: any) {
-      console.error("Error saving information:", err.message);
-      alert("There was an error saving your information. Please try again.");
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        console.error("Error saving information:", err.message);
+        alert("There was an error saving your information. Please try again.");
+      } else {
+        console.error("Unexpected error saving information:", err);
+        alert("An unexpected error occurred. Please try again.");
+      }
     }
 
     setLoading(false);

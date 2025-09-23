@@ -7,6 +7,7 @@ import { UserInformation } from "@/types/userInformation";
 export default function MetaInformation() {
   const supabase = createClient();
 
+  // ✅ No user_id here anymore
   const [userInfo, setUserInfo] = useState<UserInformation>({
     technical_skills: "",
     soft_skills: "",
@@ -26,7 +27,7 @@ export default function MetaInformation() {
     personal_projects: "",
   });
 
-  // Refs for each textarea
+  // Refs for auto-resizing textareas
   const technicalSkillsRef = useRef<HTMLTextAreaElement | null>(null);
   const softSkillsRef = useRef<HTMLTextAreaElement | null>(null);
   const extraCurricularsRef = useRef<HTMLTextAreaElement | null>(null);
@@ -82,6 +83,7 @@ export default function MetaInformation() {
     const fetchUserInfo = async () => {
       setLoading(true);
 
+      // Get current authenticated user
       const {
         data: { user },
         error: userError,
@@ -96,17 +98,25 @@ export default function MetaInformation() {
         return;
       }
 
+      // Fetch the user's information
       const { data, error } = await supabase
         .from("user_information")
         .select("*")
-        .eq("user_id", user.id)
+        .eq("user_id", user.id) // still filter by user_id in the query
         .single();
 
       if (error && error.code !== "PGRST116") {
         console.error("Error fetching user info:", error.message);
       }
 
-      const loadedData = data || { ...userInfo, user_id: user.id };
+      // Load data or empty defaults
+      const loadedData = data || {
+        technical_skills: "",
+        soft_skills: "",
+        extra_curriculars: "",
+        personal_projects: "",
+      };
+
       setUserInfo(loadedData);
       setOriginalUserInfo(loadedData);
 
@@ -117,13 +127,13 @@ export default function MetaInformation() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 🔹 Run autoResize AFTER userInfo loads
+  // Run autoResize AFTER userInfo loads
   useEffect(() => {
     if (technicalSkillsRef.current) autoResize(technicalSkillsRef.current);
     if (softSkillsRef.current) autoResize(softSkillsRef.current);
     if (extraCurricularsRef.current) autoResize(extraCurricularsRef.current);
     if (personalProjectsRef.current) autoResize(personalProjectsRef.current);
-  }, [userInfo]); // Re-run whenever data changes
+  }, [userInfo]);
 
   // Handle changes to fields
   const handleChange = (
@@ -146,8 +156,14 @@ export default function MetaInformation() {
   const handleSave = async () => {
     setLoading(true);
 
-    if (!userInfo.user_id) {
-      console.error("Cannot save without a valid user_id");
+    // Get current authenticated user here for saving
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      console.error("Error fetching user for save:", userError?.message);
       setLoading(false);
       return;
     }
@@ -163,18 +179,26 @@ export default function MetaInformation() {
     }
 
     try {
-      const { error } = await supabase
-        .from("user_information")
-        .upsert([userInfo]);
+      const { error } = await supabase.from("user_information").upsert([
+        {
+          ...userInfo,
+          user_id: user.id, // Only pass here when saving, not stored in state
+        },
+      ]);
 
       if (error) throw error;
 
       setOriginalUserInfo(userInfo);
       setIsDirty(false);
       alert("Information saved successfully!");
-    } catch (err: any) {
-      console.error("Error saving information:", err.message);
-      alert("There was an error saving your information. Please try again.");
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        console.error("Error saving information:", err.message);
+        alert("There was an error saving your information. Please try again.");
+      } else {
+        console.error("Unexpected error saving information:", err);
+        alert("An unexpected error occurred. Please try again.");
+      }
     }
 
     setLoading(false);

@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import MetaInformation from "./projects-clients";
 import CoverLetters from "./cover-letters";
-import { Button } from "@/components/ui/button";
 import PersonalInformation from "./personal-information";
 
 export default async function ProtectedPage() {

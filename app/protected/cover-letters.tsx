@@ -1,6 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+interface CoverLetterRecord {
+  id: string;
+  job_id: string;
+  cover_letter: string;
+  jobs?: {
+    job_title?: string;
+    company_id?: string;
+    companies?: {
+      name?: string;
+    };
+  };
+}
+
+import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
@@ -46,18 +59,10 @@ export default function CoverLetters() {
   /**
    * Fetch data when component mounts or render state changes
    */
-  useEffect(() => {
-    if (render) {
-      fetchAvailableJobs();
-    } else {
-      fetchCoverLetters();
-    }
-  }, [render]);
-
   /**
    * Fetch all cover letters for the logged-in user
    */
-  const fetchCoverLetters = async () => {
+  const fetchCoverLetters = useCallback(async () => {
     const {
       data: { user },
       error: userError,
@@ -75,39 +80,45 @@ export default function CoverLetters() {
       .from("cover_letters")
       .select(
         `
-        id,
-        job_id,
-        cover_letter,
-        jobs (
-          job_title,
-          company_id,
-          companies (name)
-        )
-      `
+      id,
+      job_id,
+      cover_letter,
+      jobs (
+        job_title,
+        company_id,
+        companies (name)
+      )
+    `
       )
       .eq("user_id", user.id);
+
+    const typedData = data as CoverLetterRecord[]; // ✅ Force TypeScript to treat it correctly
 
     if (error) {
       console.error("Error fetching cover letters:", error.message);
       return;
     }
 
-    // Format data so it's easier to use
-    const formatted = data.map((item: any) => ({
-      id: item.id,
-      job_id: item.job_id,
-      cover_letter: item.cover_letter,
-      job_title: item.jobs?.job_title || "Untitled Job",
-      company_name: item.jobs?.companies?.name || "Unknown Company",
-    }));
+    const formatted = typedData.map((item) => {
+      const job = item.jobs;
+      const company = job?.companies;
+
+      return {
+        id: item.id,
+        job_id: item.job_id,
+        cover_letter: item.cover_letter,
+        job_title: job?.job_title || "Untitled Job",
+        company_name: company?.name || "Unknown Company",
+      };
+    });
 
     setCoverLetters(formatted || []);
-  };
+  }, [supabase]);
 
   /**
    * Fetch available jobs that don't have a cover letter yet
    */
-  const fetchAvailableJobs = async () => {
+  const fetchAvailableJobs = useCallback(async () => {
     try {
       const {
         data: { user },
@@ -133,7 +144,18 @@ export default function CoverLetters() {
 
       const { data: letters, error: lettersError } = await supabase
         .from("cover_letters")
-        .select("job_id")
+        .select(
+          `
+    id,
+    job_id,
+    cover_letter,
+    jobs (
+      job_title,
+      company_id,
+      companies (name)
+    )
+  `
+        )
         .eq("user_id", user.id);
 
       if (lettersError) {
@@ -143,7 +165,6 @@ export default function CoverLetters() {
 
       const existingJobIds = new Set(letters.map((letter) => letter.job_id));
 
-      // Jobs without a cover letter
       const jobsWithoutCoverLetter = jobs.filter(
         (job) => !existingJobIds.has(job.id)
       );
@@ -167,14 +188,17 @@ export default function CoverLetters() {
         return;
       }
 
-      const companyMap = companies.reduce((acc, company) => {
-        acc[company.id] = company.name;
-        return acc;
-      }, {} as Record<string, string>);
+      const companyMap = companies.reduce<Record<string, string>>(
+        (acc, company) => {
+          acc[company.id] = company.name;
+          return acc;
+        },
+        {}
+      );
 
       const available = jobsWithoutCoverLetter.map((job) => ({
         job_id: job.id,
-        job_title: job.job_title,
+        job_title: job.job_title, // ✅ FIX: use job.job_title
         opened: job.opened,
         company_name: companyMap[job.company_id] || "Unknown Company",
       }));
@@ -183,7 +207,15 @@ export default function CoverLetters() {
     } catch (error) {
       console.error("Unexpected error fetching available jobs:", error);
     }
-  };
+  }, [supabase]);
+
+  useEffect(() => {
+    if (render) {
+      fetchAvailableJobs();
+    } else {
+      fetchCoverLetters();
+    }
+  }, [render, fetchAvailableJobs, fetchCoverLetters]);
 
   /**
    * Handles checkbox toggle

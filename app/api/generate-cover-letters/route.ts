@@ -4,21 +4,20 @@ import { createServerClient } from "@supabase/ssr";
 import OpenAI from "openai";
 
 export async function POST(req: Request) {
-  const cookieStore = cookies();
+const cookieStore = cookies();
 
-  // 1. Create Supabase server client with cookies
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_OR_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll() {},
-      },
-    }
-  );
+const supabase = createServerClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_OR_ANON_KEY!,
+  {
+    cookies: {
+      get: async (name: string) => (await cookieStore).get(name)?.value,
+      set: () => {},    // no-op
+      remove: () => {}, // no-op
+    },
+  }
+);
+
 
   // 2. Verify user session
   const { data: authData, error: authError } = await supabase.auth.getUser();

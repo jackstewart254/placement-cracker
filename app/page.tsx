@@ -1,14 +1,13 @@
-import { DeployButton } from "@/components/deploy-button";
 import { EnvVarWarning } from "@/components/env-var-warning";
 import { AuthButton } from "@/components/auth-button";
-import { Hero } from "@/components/hero";
 import { ThemeSwitcher } from "@/components/theme-switcher";
-import { ConnectSupabaseSteps } from "@/components/tutorial/connect-supabase-steps";
-import { SignUpUserSteps } from "@/components/tutorial/sign-up-user-steps";
 import { hasEnvVars } from "@/lib/utils";
 import Link from "next/link";
 
 export default function Home() {
+  console.log(process.env.NEXT_PUBLIC_SUPABASE_URL);
+  console.log(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+
   return (
     <main className="min-h-screen flex flex-col items-center">
       <div className="flex-1 w-full flex flex-col gap-20 items-center">
@@ -22,7 +21,7 @@ export default function Home() {
         </nav>
         <div className="flex-1 flex items-center justify-center max-w-5xl p-5 flex-col">
           <h1 className="text-4xl font-bold mb-4">
-            Placement's are simple, it's a numbers game.
+            Placement&apos;s are simple, it&apos;s a numbers game.
           </h1>
           <p className="text-base font-normal text-muted-foreground">
             Start generating...{" "}
