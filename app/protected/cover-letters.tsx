@@ -1,26 +1,12 @@
 "use client";
 
-interface CoverLetterRecord {
-  id: string;
-  job_id: string;
-  cover_letter: string;
-  jobs?: {
-    job_title?: string;
-    company_id?: string;
-    url?: string; // ✅ URL now included in jobs
-    companies?: {
-      name?: string;
-    };
-  };
-}
-
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Button } from "@/components/ui/button";
-import { format } from "date-fns";
-import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Loader2Icon } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { DataTable } from "./data-table";
+import { getColumns, UnifiedCoverLetter } from "./columns";
 
 import {
   Dialog,
@@ -28,210 +14,134 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 
-interface AvailableJob {
-  job_id: string;
-  job_title: string;
-  opened: string;
-  company_name: string;
-  url?: string;
-}
-
-interface CoverLetter {
+// ✅ Define the type for the raw response from Supabase
+type RawCoverLetter = {
   id: string;
   job_id: string;
-  cover_letter: string;
-  job_title?: string;
-  company_name?: string;
-  url?: string;
-}
+  cover_letter?: string;
+  jobs?: {
+    job_title: string;
+    opened: string;
+    company_id: string;
+    url?: string;
+    companies?: {
+      name: string;
+    };
+  };
+};
 
 export default function CoverLetters() {
   const supabase = createClient();
-  const [coverLetters, setCoverLetters] = useState<CoverLetter[]>([]);
-  const [availableJobs, setAvailableJobs] = useState<AvailableJob[]>([]);
-  const [selectedJobs, setSelectedJobs] = useState<string[]>([]);
-  const [render, setRender] = useState<boolean>(true);
-  const [loading, setLoading] = useState(false);
-  const [currentJob, setCurrentJob] = useState<AvailableJob | null>(null);
-  const [openLetter, setOpenLetter] = useState<CoverLetter | null>(null);
+  const [allJobs, setAllJobs] = useState<UnifiedCoverLetter[]>([]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [openLetter, setOpenLetter] = useState<UnifiedCoverLetter | null>(null);
 
-  /**
-   * Fetch all cover letters for the logged-in user
-   */
-  const fetchCoverLetters = useCallback(async () => {
+  const [currentGeneratingId, setCurrentGeneratingId] = useState<string | null>(
+    null
+  );
+  const [loading, setLoading] = useState(false);
+
+  const fetchJobs = useCallback(async () => {
     const {
       data: { user },
       error: userError,
     } = await supabase.auth.getUser();
+    if (userError || !user) return;
 
-    if (userError || !user) {
-      console.error(
-        "Error fetching user:",
-        userError?.message || "No user found"
-      );
-      return;
-    }
+    // Fetch base jobs
+    const { data: jobs } = await supabase
+      .from("jobs")
+      .select("id, job_title, opened, company_id, url");
 
-    const { data, error } = await supabase
+    // Fetch companies
+    const { data: companies } = await supabase
+      .from("companies")
+      .select("id, name");
+
+    // Fetch cover letters and related jobs + companies
+    const { data: letters } = await supabase
       .from("cover_letters")
       .select(
         `
         id,
         job_id,
         cover_letter,
-        jobs (
+        jobs!inner (
           job_title,
+          opened,
           company_id,
           url,
-          companies (name)
+          companies!inner (
+            name
+          )
         )
       `
       )
-      .eq("user_id", user.id);
+      .eq("user_id", user.id)
+      .returns<RawCoverLetter[]>(); // ✅ Properly typed response
 
-    const typedData = data as CoverLetterRecord[];
+    // Create a map for company lookup
+    const companyMap = (companies || []).reduce<Record<string, string>>(
+      (acc, c) => {
+        acc[c.id] = c.name;
+        return acc;
+      },
+      {}
+    );
 
-    if (error) {
-      console.error("Error fetching cover letters:", error.message);
-      return;
+    // ✅ Populate letterMap with cover letters
+    const letterMap = new Map<string, UnifiedCoverLetter>();
+
+    for (const l of letters || []) {
+      const job = l.jobs; // ✅ single job object now
+      const company = job?.companies; // ✅ single company object now
+
+      letterMap.set(l.job_id, {
+        id: l.id,
+        job_id: l.job_id,
+        job_title: job?.job_title || "Untitled",
+        company_name: company?.name || "Unknown",
+        opened: job?.opened || "",
+        url: job?.url || "",
+        cover_letter: l.cover_letter, // important!
+      });
     }
 
-    const formatted = typedData.map((item) => {
-      const job = item.jobs;
-      const company = job?.companies;
-
-      return {
-        id: item.id,
-        job_id: item.job_id,
-        cover_letter: item.cover_letter,
-        job_title: job?.job_title || "Untitled Job",
-        company_name: company?.name || "Unknown Company",
-        url: job?.url || "",
-      };
+    // ✅ Combine jobs and cover letters
+    const unified: UnifiedCoverLetter[] = (jobs || []).map((job) => {
+      const existing = letterMap.get(job.id);
+      return (
+        existing || {
+          id: job.id,
+          job_id: job.id,
+          job_title: job.job_title,
+          company_name: companyMap[job.company_id] || "Unknown",
+          opened: job.opened,
+          url: job.url || "",
+        }
+      );
     });
 
-    setCoverLetters(formatted || []);
-  }, [supabase]);
-
-  /**
-   * Fetch available jobs that don't have a cover letter yet
-   */
-  const fetchAvailableJobs = useCallback(async () => {
-    try {
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-
-      if (userError || !user) {
-        console.error(
-          "Error fetching user:",
-          userError?.message || "No user found"
-        );
-        return;
-      }
-
-      const { data: jobs, error: jobsError } = await supabase
-        .from("jobs")
-        .select("id, job_title, opened, company_id, url");
-
-      if (jobsError) {
-        console.error("Error fetching jobs:", jobsError.message);
-        return;
-      }
-
-      const { data: letters, error: lettersError } = await supabase
-        .from("cover_letters")
-        .select("job_id")
-        .eq("user_id", user.id);
-
-      if (lettersError) {
-        console.error("Error fetching cover letters:", lettersError.message);
-        return;
-      }
-
-      const existingJobIds = new Set(letters.map((letter) => letter.job_id));
-
-      const jobsWithoutCoverLetter = jobs.filter(
-        (job) => !existingJobIds.has(job.id)
-      );
-
-      if (jobsWithoutCoverLetter.length === 0) {
-        setAvailableJobs([]);
-        return;
-      }
-
-      const companyIds = [
-        ...new Set(jobsWithoutCoverLetter.map((job) => job.company_id)),
-      ];
-
-      const { data: companies, error: companiesError } = await supabase
-        .from("companies")
-        .select("id, name")
-        .in("id", companyIds);
-
-      if (companiesError) {
-        console.error("Error fetching companies:", companiesError.message);
-        return;
-      }
-
-      const companyMap = companies.reduce<Record<string, string>>(
-        (acc, company) => {
-          acc[company.id] = company.name;
-          return acc;
-        },
-        {}
-      );
-
-      const available = jobsWithoutCoverLetter.map((job) => ({
-        job_id: job.id,
-        job_title: job.job_title,
-        opened: job.opened,
-        company_name: companyMap[job.company_id] || "Unknown Company",
-        url: job.url,
-      }));
-
-      setAvailableJobs(available);
-    } catch (error) {
-      console.error("Unexpected error fetching available jobs:", error);
-    }
+    setAllJobs(unified);
   }, [supabase]);
 
   useEffect(() => {
-    if (render) {
-      fetchAvailableJobs();
-    } else {
-      fetchCoverLetters();
-    }
-  }, [render, fetchAvailableJobs, fetchCoverLetters]);
+    fetchJobs();
+  }, [fetchJobs]);
 
-  const handleCheckboxChange = (jobId: string) => {
-    setSelectedJobs((prev) =>
-      prev.includes(jobId)
-        ? prev.filter((id) => id !== jobId)
-        : [...prev, jobId]
+  const handleGenerateMultiple = async () => {
+    const toGenerate = allJobs.filter(
+      (j) => selected.has(j.job_id) && !j.cover_letter
     );
-  };
-
-  const handleSubmit = async () => {
-    if (selectedJobs.length === 0) {
-      toast.error("Please select at least one job.");
-      return;
-    }
-
-    const selectedJobDetails = availableJobs.filter((job) =>
-      selectedJobs.includes(job.job_id)
-    );
+    if (toGenerate.length === 0) return toast.error("No jobs selected.");
 
     setLoading(true);
-    setRender(false);
 
     try {
-      for (const job of selectedJobDetails) {
-        setCurrentJob(job);
+      for (const job of toGenerate) {
+        setCurrentGeneratingId(job.job_id);
 
         const res = await fetch("/api/generate-cover-letters", {
           method: "POST",
@@ -241,9 +151,7 @@ export default function CoverLetters() {
               {
                 id: job.job_id,
                 job_title: job.job_title,
-                description: `Company: ${job.company_name}\nOpened: ${
-                  job.opened
-                }\nURL: ${job.url || "N/A"}`,
+                description: `Company: ${job.company_name}\nOpened: ${job.opened}\nURL: ${job.url}`,
               },
             ],
             input: "Write a professional cover letter tailored to this job.",
@@ -251,162 +159,87 @@ export default function CoverLetters() {
         });
 
         const result = await res.json();
-
         if (!result.success) {
           toast.error(`Error generating for ${job.job_title}`);
-          continue;
         }
 
-        setCoverLetters((prev) => [...prev, ...result.data]);
+        // Refresh after each job is generated
+        await fetchJobs();
+
+        // Remove from selected
+        setSelected((prev) => {
+          const next = new Set(prev);
+          next.delete(job.job_id);
+          return next;
+        });
       }
 
-      toast.success("Cover letters generated successfully!");
-    } catch (err) {
-      console.error("Error generating cover letters:", err);
-      toast.error("Something went wrong generating cover letters.");
+      toast.success("All selected cover letters generated!");
+    } catch (e) {
+      console.error(e);
+      toast.error("Something went wrong");
     } finally {
-      setCurrentJob(null);
       setLoading(false);
-      setSelectedJobs([]);
+      setCurrentGeneratingId(null);
     }
   };
 
-  const renderAvailable = () => (
-    <div className="flex flex-col gap-4 w-full">
-      {availableJobs.map((job) => (
-        <div
-          key={job.job_id}
-          className="flex flex-row items-center gap-2 border rounded-md p-3 bg-accent"
-        >
-          <Checkbox
-            checked={selectedJobs.includes(job.job_id)}
-            onCheckedChange={() => handleCheckboxChange(job.job_id)}
-          />
-          <div className="mx-2 bg-muted-foreground rounded-md w-[1px] h-full" />
-          <div className="flex flex-col w-full">
-            <div className="flex flex-row justify-between">
-              <h3 className="font-medium text-sm">{job.job_title}</h3>
-              <p className="text-xs">
-                {format(new Date(job.opened), "EEE, do MMMM")}
-              </p>
-            </div>
-            <p className="text-sm text-muted-foreground">{job.company_name}</p>
-            {job.url && (
-              <a
-                href={job.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-blue-500 hover:underline mt-1"
-              >
-                View Job Posting
-              </a>
-            )}
-          </div>
-        </div>
-      ))}
+  const handleSelect = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
 
-      {selectedJobs.length > 0 && (
-        <Button onClick={handleSubmit} disabled={loading}>
-          {loading ? "Generating..." : "Generate Cover Letters"}
-        </Button>
-      )}
-    </div>
-  );
-
-  const renderCoverLetters = () => (
-    <div className="flex flex-col gap-2 w-full">
-      {coverLetters.map((letter) => (
-        <Dialog
-          key={letter.id}
-          open={openLetter?.id === letter.id}
-          onOpenChange={(isOpen) => setOpenLetter(isOpen ? letter : null)}
-        >
-          <DialogTrigger asChild>
-            <div
-              onClick={() => setOpenLetter(letter)}
-              className="cursor-pointer border rounded-md p-3 flex flex-col bg-accent hover:bg-accent/70 transition"
-            >
-              <p className="font-medium text-sm">
-                {letter.job_title} - {letter.company_name}
-              </p>
-              {letter.url && (
-                <span className="text-xs text-blue-500 mt-1">{letter.url}</span>
-              )}
-            </div>
-          </DialogTrigger>
-
-          <DialogContent className="max-w-5xl h-[70%] overflow-auto">
-            <DialogHeader>
-              <DialogTitle>
-                {letter.job_title} at {letter.company_name}
-              </DialogTitle>
-              <DialogDescription>
-                Below is the generated cover letter for this job.
-              </DialogDescription>
-            </DialogHeader>
-            {letter.url && (
-              <a
-                href={letter.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-500 hover:underline mb-2 block text-sm"
-              >
-                View Job Posting
-              </a>
-            )}
-            <div className="mt-4 whitespace-pre-wrap text-sm">
-              {letter.cover_letter}
-            </div>
-          </DialogContent>
-        </Dialog>
-      ))}
-
-      {loading && currentJob && (
-        <Button size="sm" disabled className="flex justify-start gap-2 py-2">
-          <Loader2Icon className="animate-spin" />
-          <span>
-            Generating: <strong>{currentJob.job_title}</strong> at{" "}
-            <strong>{currentJob.company_name}</strong>
-          </span>
-        </Button>
-      )}
-    </div>
-  );
-
-  const renderEmpty = () => (
-    <div className="flex items-center justify-center w-full">
-      <p className="text-muted-foreground text-sm">No data available</p>
-    </div>
-  );
+  const handleOpen = (row: UnifiedCoverLetter) => setOpenLetter(row);
 
   return (
-    <div className="flex w-full flex-col">
-      <div className="flex flex-row mb-4">
+    <div className="flex flex-col w-auto gap-4">
+      <div className="flex justify-between items-center">
+        <h2 className="text-xl font-semibold">Applications</h2>
         <Button
-          variant="ghost"
-          className={`text-muted-foreground ${render ? "font-bold" : ""}`}
-          onClick={() => setRender(true)}
+          onClick={handleGenerateMultiple}
+          disabled={loading || selected.size === 0}
         >
-          New
-        </Button>
-        <Button
-          variant="ghost"
-          className={`text-muted-foreground ${!render ? "font-bold" : ""}`}
-          onClick={() => setRender(false)}
-        >
-          Generated
+          {loading && <Loader2Icon className="w-4 h-4 mr-2 animate-spin" />}
+          Generate Selected
         </Button>
       </div>
 
-      <div className="w-full min-h-[32px] flex flex-row">
-        {render
-          ? availableJobs.length > 0
-            ? renderAvailable()
-            : renderEmpty()
-          : coverLetters.length > 0 || loading
-          ? renderCoverLetters()
-          : renderEmpty()}
+      <div className="w-full overflow-auto">
+        <DataTable
+          columns={getColumns({
+            onOpen: handleOpen,
+            onSelect: handleSelect,
+            selected,
+            currentGeneratingId,
+            loading,
+          })}
+          data={allJobs}
+        />
       </div>
+
+      <Dialog
+        open={!!openLetter}
+        onOpenChange={(open) => {
+          if (!open) setOpenLetter(null);
+        }}
+      >
+        <DialogContent className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-4xl h-[80vh] flex flex-col overflow-auto">
+          <DialogHeader>
+            <DialogTitle>{openLetter?.job_title}</DialogTitle>
+            <DialogDescription>{openLetter?.company_name}</DialogDescription>
+          </DialogHeader>
+          <div className="whitespace-pre-wrap text-sm mt-4">
+            {openLetter?.cover_letter}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
