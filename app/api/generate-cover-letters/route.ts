@@ -131,7 +131,7 @@ You are an expert career assistant. Write a personalized and professional cover 
 
     // 9. Send prompt to OpenAI
     const response = await openai.responses.create({
-      model: "gpt-4o",
+      model: "gpt-5",
       input: aiPrompt,
     });
 

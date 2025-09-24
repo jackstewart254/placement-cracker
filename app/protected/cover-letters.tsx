@@ -16,14 +16,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-// ✅ Define the type for the raw response from Supabase
+// Raw response from Supabase for cover letters
 type RawCoverLetter = {
   id: string;
   job_id: string;
   cover_letter?: string;
   jobs?: {
     job_title: string;
-    opened: string;
+    created_at: string;
     company_id: string;
     url?: string;
     companies?: {
@@ -34,103 +34,145 @@ type RawCoverLetter = {
 
 export default function CoverLetters() {
   const supabase = createClient();
+
   const [allJobs, setAllJobs] = useState<UnifiedCoverLetter[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [openLetter, setOpenLetter] = useState<UnifiedCoverLetter | null>(null);
-
   const [currentGeneratingId, setCurrentGeneratingId] = useState<string | null>(
     null
   );
   const [loading, setLoading] = useState(false);
 
-  const fetchJobs = useCallback(async () => {
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-    if (userError || !user) return;
+  // Pagination
+  const PAGE_SIZE = 20;
+  const [page, setPage] = useState(1);
+  const [totalJobs, setTotalJobs] = useState(0);
 
-    // Fetch base jobs
-    const { data: jobs } = await supabase
-      .from("jobs")
-      .select("id, job_title, opened, company_id, url");
-
-    // Fetch companies
-    const { data: companies } = await supabase
-      .from("companies")
-      .select("id, name");
-
-    // Fetch cover letters and related jobs + companies
-    const { data: letters } = await supabase
-      .from("cover_letters")
-      .select(
-        `
-        id,
-        job_id,
-        cover_letter,
-        jobs!inner (
-          job_title,
-          opened,
-          company_id,
-          url,
-          companies!inner (
-            name
-          )
-        )
-      `
-      )
-      .eq("user_id", user.id)
-      .returns<RawCoverLetter[]>(); // ✅ Properly typed response
-
-    // Create a map for company lookup
-    const companyMap = (companies || []).reduce<Record<string, string>>(
-      (acc, c) => {
-        acc[c.id] = c.name;
-        return acc;
-      },
-      {}
-    );
-
-    // ✅ Populate letterMap with cover letters
-    const letterMap = new Map<string, UnifiedCoverLetter>();
-
-    for (const l of letters || []) {
-      const job = l.jobs; // ✅ single job object now
-      const company = job?.companies; // ✅ single company object now
-
-      letterMap.set(l.job_id, {
-        id: l.id,
-        job_id: l.job_id,
-        job_title: job?.job_title || "Untitled",
-        company_name: company?.name || "Unknown",
-        opened: job?.opened || "",
-        url: job?.url || "",
-        cover_letter: l.cover_letter, // important!
-      });
-    }
-
-    // ✅ Combine jobs and cover letters
-    const unified: UnifiedCoverLetter[] = (jobs || []).map((job) => {
-      const existing = letterMap.get(job.id);
-      return (
-        existing || {
-          id: job.id,
-          job_id: job.id,
-          job_title: job.job_title,
-          company_name: companyMap[job.company_id] || "Unknown",
-          opened: job.opened,
-          url: job.url || "",
+  /**
+   * Fetch jobs + cover letters for the current page
+   */
+  const fetchJobs = useCallback(
+    async (currentPage = 1) => {
+      try {
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+        if (userError || !user) {
+          toast.error("Failed to fetch user information.");
+          return;
         }
-      );
-    });
 
-    setAllJobs(unified);
-  }, [supabase]);
+        const offset = (currentPage - 1) * PAGE_SIZE;
+
+        // Fetch jobs with pagination
+        const {
+          data: jobs,
+          error: jobsError,
+          count,
+        } = await supabase
+          .from("jobs")
+          .select("*", { count: "exact" })
+          .range(offset, offset + PAGE_SIZE - 1)
+          .order("created_at", { ascending: false });
+
+        if (jobsError) throw jobsError;
+        setTotalJobs(count || 0);
+
+        if (!jobs || jobs.length === 0) {
+          setAllJobs([]);
+          return;
+        }
+
+        // Fetch companies
+        const { data: companies, error: companiesError } = await supabase
+          .from("companies")
+          .select("id, name");
+        if (companiesError) throw companiesError;
+
+        // Fetch cover letters for only visible jobs
+        const jobIds = jobs.map((job) => job.id);
+        const { data: letters, error: lettersError } = await supabase
+          .from("cover_letters")
+          .select(
+            `
+            id,
+            job_id,
+            cover_letter,
+            jobs!inner (
+              job_title,
+              created_at,
+              company_id,
+              url,
+              companies!inner ( name )
+            )
+          `
+          )
+          .eq("user_id", user.id)
+          .in("job_id", jobIds)
+          .returns<RawCoverLetter[]>();
+
+        if (lettersError) throw lettersError;
+
+        // Build company lookup map
+        const companyMap = (companies || []).reduce<Record<string, string>>(
+          (acc, c) => {
+            acc[c.id] = c.name;
+            return acc;
+          },
+          {}
+        );
+
+        // Build cover letter map
+        const letterMap = new Map<string, UnifiedCoverLetter>();
+        for (const l of letters || []) {
+          const job = l.jobs;
+          const company = job?.companies;
+          letterMap.set(l.job_id, {
+            id: l.id,
+            job_id: l.job_id,
+            job_title: job?.job_title || "Untitled",
+            company_name: company?.name || "Unknown",
+            created_at: job?.created_at || "",
+            url: job?.url || "",
+            cover_letter: l.cover_letter,
+          });
+        }
+
+        // Combine jobs + cover letters into unified list
+        const unified: UnifiedCoverLetter[] = jobs.map((job) => {
+          const existing = letterMap.get(job.id);
+          return (
+            existing || {
+              id: job.id,
+              job_id: job.id,
+              job_title: job.job_title,
+              company_name: companyMap[job.company_id] || "Unknown",
+              created_at: job.created_at,
+              url: job.url || "",
+            }
+          );
+        });
+
+        setAllJobs(unified);
+      } catch (error: any) {
+        console.error("Error fetching jobs data:", error?.message || error);
+        toast.error(
+          `Error fetching jobs: ${error?.message || "Unknown error"}`
+        );
+      }
+    },
+    [supabase]
+  );
 
   useEffect(() => {
-    fetchJobs();
-  }, [fetchJobs]);
+    setLoading(true);
+    fetchJobs(page).finally(() => setLoading(false));
+  }, [fetchJobs, page]);
 
+  /**
+   * Generate multiple cover letters for selected jobs
+   */
   const handleGenerateMultiple = async () => {
     const toGenerate = allJobs.filter(
       (j) => selected.has(j.job_id) && !j.cover_letter
@@ -151,7 +193,7 @@ export default function CoverLetters() {
               {
                 id: job.job_id,
                 job_title: job.job_title,
-                description: `Company: ${job.company_name}\nOpened: ${job.opened}\nURL: ${job.url}`,
+                description: `Company: ${job.company_name}\nCreated At: ${job.created_at}\nURL: ${job.url}`,
               },
             ],
             input: "Write a professional cover letter tailored to this job.",
@@ -163,10 +205,10 @@ export default function CoverLetters() {
           toast.error(`Error generating for ${job.job_title}`);
         }
 
-        // Refresh after each job is generated
-        await fetchJobs();
+        // Refresh data after each generated letter
+        await fetchJobs(page);
 
-        // Remove from selected
+        // Remove job from selected
         setSelected((prev) => {
           const next = new Set(prev);
           next.delete(job.job_id);
@@ -184,6 +226,9 @@ export default function CoverLetters() {
     }
   };
 
+  /**
+   * Toggle job selection
+   */
   const handleSelect = (id: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -224,6 +269,30 @@ export default function CoverLetters() {
         />
       </div>
 
+      {/* Pagination Controls */}
+      <div className="flex justify-between items-center mt-4">
+        <Button
+          variant="outline"
+          disabled={page === 1}
+          onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
+        >
+          Previous
+        </Button>
+
+        <span className="text-sm">
+          Page {page} of {Math.ceil(totalJobs / PAGE_SIZE) || 1}
+        </span>
+
+        <Button
+          variant="outline"
+          disabled={page >= Math.ceil(totalJobs / PAGE_SIZE)}
+          onClick={() => setPage((prev) => prev + 1)}
+        >
+          Next
+        </Button>
+      </div>
+
+      {/* Dialog for viewing cover letters */}
       <Dialog
         open={!!openLetter}
         onOpenChange={(open) => {

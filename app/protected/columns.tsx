@@ -6,15 +6,15 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2Icon } from "lucide-react";
 import { format } from "date-fns";
 
-export type UnifiedCoverLetter = {
+export interface UnifiedCoverLetter {
   id: string;
   job_id: string;
   job_title: string;
   company_name: string;
-  opened: string; // ISO date string from Supabase
-  url?: string;
+  created_at: string; // ✅ Using created_at instead of opened
+  url: string;
   cover_letter?: string;
-};
+}
 
 interface GetColumnsParams {
   onOpen: (row: UnifiedCoverLetter) => void;
@@ -32,11 +32,11 @@ export function getColumns({
   loading,
 }: GetColumnsParams): ColumnDef<UnifiedCoverLetter>[] {
   return [
-    // ✅ Job Title - more space for long names
+    // Job Title
     {
       accessorKey: "job_title",
       header: "Job Title",
-      size: 300, // increased for better readability
+      size: 300,
       cell: ({ row }) => (
         <div className="truncate max-w-[280px]" title={row.original.job_title}>
           {row.original.job_title}
@@ -44,7 +44,7 @@ export function getColumns({
       ),
     },
 
-    // ✅ Company
+    // Company
     {
       accessorKey: "company_name",
       header: "Company",
@@ -59,18 +59,18 @@ export function getColumns({
       ),
     },
 
-    // ✅ Opened - smaller and formatted with date-fns
+    // Created At (formerly "Opened")
     {
-      accessorKey: "opened",
-      header: "Opened",
-      size: 120, // reduced size
+      accessorKey: "created_at",
+      header: "Created At",
+      size: 140,
       cell: ({ row }) => {
-        const date = new Date(row.original.opened);
+        const date = new Date(row.original.created_at);
         return <span className="text-sm">{format(date, "EEE, do MMM")}</span>;
       },
     },
 
-    // ✅ Link
+    // Link
     {
       accessorKey: "url",
       header: "Link",
@@ -90,11 +90,11 @@ export function getColumns({
         ),
     },
 
-    // ✅ Actions - fixed small width
+    // Actions
     {
       id: "actions",
       header: "Action",
-      size: 64, // compact width
+      size: 64,
       cell: ({ row }) => {
         const hasLetter = !!row.original.cover_letter;
         const isCurrent = currentGeneratingId === row.original.job_id;
