@@ -1,10 +1,10 @@
 "use client";
 
 import {
+  ColumnDef,
   flexRender,
   getCoreRowModel,
   useReactTable,
-  ColumnDef,
 } from "@tanstack/react-table";
 import {
   Table,
@@ -15,15 +15,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-import { UnifiedCoverLetter } from "./columns";
-
-interface DataTableProps {
-  data: UnifiedCoverLetter[];
-  columns: ColumnDef<UnifiedCoverLetter>[];
+interface DataTableProps<TData> {
+  data: TData[];
+  columns: ColumnDef<TData>[];
 }
 
-export function DataTable({ data, columns }: DataTableProps) {
-  const table = useReactTable({
+export function DataTable<TData>({ data, columns }: DataTableProps<TData>) {
+  const table = useReactTable<TData>({
     data,
     columns,
     getCoreRowModel: getCoreRowModel(),
