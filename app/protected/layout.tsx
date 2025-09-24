@@ -23,6 +23,12 @@ export default function ProtectedLayout({
           {/* Center Section: Navigation Links */}
           <div className="flex gap-6">
             <Link
+              href="/protected/me"
+              className="hover:text-primary transition-colors font-medium"
+            >
+              Me
+            </Link>
+            <Link
               href="/protected"
               className="hover:text-primary transition-colors font-medium"
             >
