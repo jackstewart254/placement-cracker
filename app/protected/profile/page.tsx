@@ -15,7 +15,7 @@ export default async function ProfilePage() {
   }
 
   return (
-    <div className="flex flex-col gap-12 p-20 w-full border">
+    <div className="flex flex-col gap-12 p-20 w-full">
       {/* Personal Information Section */}
       <div className="w-full flex flex-col">
         <h2 className="font-bold text-2xl mb-4">Personal Information</h2>

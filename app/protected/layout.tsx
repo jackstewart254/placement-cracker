@@ -23,16 +23,16 @@ export default function ProtectedLayout({
           {/* Center Section: Navigation Links */}
           <div className="flex gap-6">
             <Link
-              href="/protected/me"
-              className="hover:text-primary transition-colors font-medium"
-            >
-              Me
-            </Link>
-            <Link
               href="/protected"
               className="hover:text-primary transition-colors font-medium"
             >
               Home
+            </Link>
+            <Link
+              href="/protected/cvs-and-letters"
+              className="hover:text-primary transition-colors font-medium"
+            >
+              CV's and Letters
             </Link>
             <Link
               href="/protected/profile"
@@ -57,8 +57,8 @@ export default function ProtectedLayout({
         </div>
       </ThemeProvider>
 
-      {/* Footer */}
-      {/* <footer className="w-full border-t h-16 flex items-center justify-center text-xs gap-8">
+      {/* Footer (optional)
+      <footer className="w-full border-t h-16 flex items-center justify-center text-xs gap-8">
         <p>
           Powered by{" "}
           <a
