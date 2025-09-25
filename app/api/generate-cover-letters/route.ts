@@ -4,22 +4,21 @@ import { createServerClient } from "@supabase/ssr";
 import OpenAI from "openai";
 
 export async function POST(req: Request) {
-const cookieStore = cookies();
+  const cookieStore = cookies();
 
-const supabase = createServerClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_OR_ANON_KEY!,
-  {
-    cookies: {
-      get: async (name: string) => (await cookieStore).get(name)?.value,
-      set: () => {},    // no-op
-      remove: () => {}, // no-op
-    },
-  }
-);
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_OR_ANON_KEY!,
+    {
+      cookies: {
+        get: async (name: string) => (await cookieStore).get(name)?.value,
+        set: () => {},    // no-op
+        remove: () => {}, // no-op
+      },
+    }
+  );
 
-
-  // 2. Verify user session
+  // 1. Verify user session
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError || !authData?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -27,10 +26,36 @@ const supabase = createServerClient(
 
   const user_id = authData.user.id;
 
-  // 3. Parse request body
+  // 2. Parse request body
   const { jobs } = await req.json();
   if (!jobs || jobs.length === 0) {
     return NextResponse.json({ error: "No jobs provided" }, { status: 400 });
+  }
+
+  // 3. Check rate limit (max 15 requests per day)
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+  const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString();
+
+  const { data: requestsToday, error: requestsError } = await supabase
+    .from("requests")
+    .select("id")
+    .eq("user_id", user_id)
+    .gte("created_at", startOfDay)
+    .lt("created_at", endOfDay);
+
+  if (requestsError) {
+    console.error("Error fetching today's requests:", requestsError.message);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+
+  if (requestsToday && requestsToday.length >= 15) {
+    return NextResponse.json(
+      {
+        error: "Rate limit reached, wait until midnight to start again.",
+      },
+      { status: 429 }
+    );
   }
 
   // 4. Fetch individual information
@@ -92,7 +117,7 @@ const supabase = createServerClient(
       continue;
     }
 
-    // 8. Build AI prompt with all necessary information
+    // 8. Build AI prompt
     const aiPrompt = `
 You are an expert career assistant. Write a personalized and professional cover letter using the provided information.
 
@@ -129,7 +154,11 @@ You are an expert career assistant. Write a personalized and professional cover 
 - Return only the cover letter text with no extra commentary.
 `;
 
-    // 9. Send prompt to OpenAI
+    // 9. Calculate token cost for input
+    const inputWordCount = aiPrompt.trim().split(/\s+/).length;
+    const tokenInput = Math.ceil(inputWordCount * 1.33); // Estimate tokens for input
+
+    // 10. Send prompt to OpenAI
     const response = await openai.responses.create({
       model: "gpt-5",
       input: aiPrompt,
@@ -137,7 +166,29 @@ You are an expert career assistant. Write a personalized and professional cover 
 
     const generatedLetter = response.output_text;
 
-    // 10. Insert generated cover letter into Supabase
+    // 11. Calculate token cost for output
+    const outputWordCount = generatedLetter.trim().split(/\s+/).length;
+    const tokenOutput = Math.ceil(outputWordCount * 1.33); // Estimate tokens for output
+
+    // 12. Insert request log into "requests" table
+    const { error: requestInsertError } = await supabase
+      .from("requests")
+      .insert([
+        {
+          user_id,
+          job_id: job.id,
+          input: aiPrompt,
+          token_input: tokenInput,
+          token_output: tokenOutput,
+        },
+      ]);
+
+    if (requestInsertError) {
+      console.error("Error inserting into requests:", requestInsertError.message);
+      continue;
+    }
+
+    // 13. Insert generated cover letter into "cover_letters" table
     const { data: inserted, error: insertError } = await supabase
       .from("cover_letters")
       .insert([
