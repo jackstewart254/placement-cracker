@@ -38,7 +38,7 @@ const PersonalInformation = () => {
   });
 
   // Validation regex
-  const nameRegex = /^[A-Za-z]{2,}\s[A-Za-z]{2,}$/; // first and last name with at least 2 letters
+  const nameRegex = /^([A-Za-z]{2,})(\s[A-Za-z]{2,})+$/;
   const yearRegex = /^[1-9]\d*$/; // positive number greater than 0
   const degreeRegex = /^(BSc|BA|MSc|MA|PhD|MBA)\b/i; // must start with these degree types
 

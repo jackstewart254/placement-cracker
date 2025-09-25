@@ -62,13 +62,17 @@ export default function Cards() {
   // Filters & Search
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCompany, setSelectedCompany] = useState("all");
-  const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedJobType, setSelectedJobType] = useState("all");
+
+  // ✅ Multi-select for categories & locations
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
 
   // Filter options
   const [companyOptions, setCompanyOptions] = useState<string[]>([]);
   const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
   const [jobTypeOptions, setJobTypeOptions] = useState<string[]>([]);
+  const [locationOptions, setLocationOptions] = useState<string[]>([]);
 
   /**
    * Fetch jobs, companies, and cover letters
@@ -144,16 +148,27 @@ export default function Cards() {
 
       setAllJobs(unified);
 
-      // Update filter dropdowns
+      // 5. Build filter options
       setCompanyOptions(
         [...new Set(unified.map((j) => j.company_name))].sort()
       );
+
       setCategoryOptions(
         [...new Set(unified.map((j) => j.category || "Uncategorized"))].sort()
       );
+
       setJobTypeOptions(
         [...new Set(unified.map((j) => j.job_type || "Other"))].sort()
       );
+
+      // Extract unique locations
+      const allLocations = unified
+        .flatMap((job) =>
+          job.location ? job.location.split(",").map((loc) => loc.trim()) : []
+        )
+        .filter(Boolean);
+
+      setLocationOptions([...new Set(allLocations)].sort());
 
       if (unified.length > 0 && !selectedJob) {
         setSelectedJob(unified[0]);
@@ -190,16 +205,44 @@ export default function Cards() {
 
       const matchesCompany =
         selectedCompany !== "all" ? job.company_name === selectedCompany : true;
-      const matchesCategory =
-        selectedCategory !== "all" ? job.category === selectedCategory : true;
+
       const matchesJobType =
         selectedJobType !== "all" ? job.job_type === selectedJobType : true;
 
+      // ✅ Multi-category filtering
+      const matchesCategory =
+        selectedCategories.length > 0
+          ? selectedCategories.includes(job.category)
+          : true;
+
+      // ✅ Multi-location filtering
+      const jobLocations = job.location
+        ? job.location.split(",").map((loc) => loc.trim().toLowerCase())
+        : [];
+
+      const matchesLocation =
+        selectedLocations.length > 0
+          ? selectedLocations.some((selected) =>
+              jobLocations.includes(selected.toLowerCase())
+            )
+          : true;
+
       return (
-        matchesSearch && matchesCompany && matchesCategory && matchesJobType
+        matchesSearch &&
+        matchesCompany &&
+        matchesCategory &&
+        matchesJobType &&
+        matchesLocation
       );
     });
-  }, [allJobs, searchTerm, selectedCompany, selectedCategory, selectedJobType]);
+  }, [
+    allJobs,
+    searchTerm,
+    selectedCompany,
+    selectedCategories,
+    selectedJobType,
+    selectedLocations,
+  ]);
 
   /**
    * Paginate
@@ -294,25 +337,46 @@ export default function Cards() {
               </SelectContent>
             </Select>
 
-            {/* Category */}
+            {/* ✅ Multi-Select Categories */}
             <Select
-              value={selectedCategory}
-              onValueChange={setSelectedCategory}
+              value={selectedCategories.join(",")}
+              onValueChange={() => {}}
             >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Category" />
+              <SelectTrigger className="w-[220px]">
+                <SelectValue placeholder="Filter by Category">
+                  {selectedCategories.length > 0
+                    ? `${selectedCategories.length} selected`
+                    : "All Categories"}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent className="max-h-60 overflow-auto">
-                <SelectItem value="all">All Categories</SelectItem>
-                {categoryOptions.map((category) => (
-                  <SelectItem key={category} value={category}>
-                    {category}
-                  </SelectItem>
+                {categoryOptions.map((cat) => (
+                  <div
+                    key={cat}
+                    className="flex items-center gap-2 px-2 py-1 cursor-pointer hover:bg-muted rounded"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedCategories((prev) =>
+                        prev.includes(cat)
+                          ? prev.filter((c) => c !== cat)
+                          : [...prev, cat]
+                      );
+                      setPage(1);
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedCategories.includes(cat)}
+                      readOnly
+                      className="h-4 w-4"
+                    />
+                    <span className="text-sm">{cat}</span>
+                  </div>
                 ))}
               </SelectContent>
             </Select>
 
-            {/* Job Type */}
+            {/* Single-select Job Type */}
             <Select value={selectedJobType} onValueChange={setSelectedJobType}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Job Type" />
@@ -323,6 +387,45 @@ export default function Cards() {
                   <SelectItem key={type} value={type}>
                     {type}
                   </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* ✅ Multi-Select Locations */}
+            <Select
+              value={selectedLocations.join(",")}
+              onValueChange={() => {}}
+            >
+              <SelectTrigger className="w-[220px]">
+                <SelectValue placeholder="Filter by Location">
+                  {selectedLocations.length > 0
+                    ? `${selectedLocations.length} selected`
+                    : "All Locations"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent className="max-h-60 overflow-auto">
+                {locationOptions.map((loc) => (
+                  <div
+                    key={loc}
+                    className="flex items-center gap-2 px-2 py-1 cursor-pointer hover:bg-muted rounded"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedLocations((prev) =>
+                        prev.includes(loc)
+                          ? prev.filter((l) => l !== loc)
+                          : [...prev, loc]
+                      );
+                      setPage(1);
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedLocations.includes(loc)}
+                      readOnly
+                      className="h-4 w-4"
+                    />
+                    <span className="text-sm">{loc}</span>
+                  </div>
                 ))}
               </SelectContent>
             </Select>
