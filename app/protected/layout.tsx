@@ -28,12 +28,21 @@ export default function ProtectedLayout({
             >
               Home
             </Link>
+
+            <Link
+              href="/protected/tracker"
+              className="hover:text-primary transition-colors font-medium"
+            >
+              Tracker
+            </Link>
+
             <Link
               href="/protected/cvs-and-letters"
               className="hover:text-primary transition-colors font-medium"
             >
               CV's and Letters
             </Link>
+
             <Link
               href="/protected/profile"
               className="hover:text-primary transition-colors font-medium"

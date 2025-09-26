@@ -119,7 +119,7 @@ export async function POST(req: Request) {
 
     // 8. Build AI prompt
     const aiPrompt = `
-You are an expert career assistant. Write a personalized and professional cover letter using the provided information.
+You are an expert career assistant. Write a personalized, professional cover letter using the provided information.
 
 ---
 **Individual Information:**
@@ -136,7 +136,6 @@ You are an expert career assistant. Write a personalized and professional cover 
 
 **Job Information:**
 - Job Title: ${jobData.job_title}
-- Category: ${jobData.category}
 - Description: ${jobData.description}
 
 **Company Information:**
@@ -144,33 +143,54 @@ You are an expert career assistant. Write a personalized and professional cover 
 
 ---
 **Instructions for AI:**
-- Analyze the job description and match it with the candidate's background.
-- Highlight the most relevant technical skills, soft skills, and projects.
-- Structure the cover letter in 3 sections:
-  1. Introduction: Why the candidate is excited about the role and company.
-  2. Main Body: Candidate's key qualifications and experiences that fit the job.
-  3. Conclusion: Closing remarks and call to action.
-- Keep the tone professional but engaging.
-- Return only the cover letter text with no extra commentary.
+Create a structured cover letter with **four paragraphs**, following this exact format:
+
+1. **Introduction:**  
+   - Clearly state the position you are applying for and mention that you discovered the opportunity on Prosple.  
+   - Briefly explain why you are excited about this role and the company.
+
+2. **Body Paragraph:**  
+   - Highlight your most relevant technical skills, experiences, and achievements that directly match the job description.  
+   - Use specific examples to demonstrate how your background aligns with the requirements of the role.
+
+3. **Cultural & Team Fit Paragraph:**  
+   - Explain why you believe you are a great fit for the company's team, culture, and working environment.  
+   - Show that you understand the company's values and how your personality, soft skills, and approach to work will help you thrive there.
+
+4. **Polite Closing Paragraph:**  
+   - End with a short, polite sentence expressing your enthusiasm and that you are looking forward to hearing back from them soon.
+
+**Additional Guidelines:**
+- Keep the tone professional yet warm and approachable.
+- Be concise and avoid overly generic language or clichés.
+- Ensure each paragraph flows naturally into the next.
+- Return only the final cover letter text — no extra commentary, notes, or explanations.
 `;
 
     // 9. Calculate token cost for input
     const inputWordCount = aiPrompt.trim().split(/\s+/).length;
     const tokenInput = Math.ceil(inputWordCount * 1.33); // Estimate tokens for input
 
-    // 10. Send prompt to OpenAI
+    // 10. Start timing
+    const startTime = Date.now();
+
+    // 11. Send prompt to OpenAI
     const response = await openai.responses.create({
       model: "gpt-5",
       input: aiPrompt,
     });
 
+    // 12. End timing
+    const endTime = Date.now();
+    const generationTimeSeconds = Math.round((endTime - startTime) / 1000); // convert ms → s
+
     const generatedLetter = response.output_text;
 
-    // 11. Calculate token cost for output
+    // 13. Calculate token cost for output
     const outputWordCount = generatedLetter.trim().split(/\s+/).length;
     const tokenOutput = Math.ceil(outputWordCount * 1.33); // Estimate tokens for output
 
-    // 12. Insert request log into "requests" table
+    // 14. Insert request log into "requests" table
     const { error: requestInsertError } = await supabase
       .from("requests")
       .insert([
@@ -180,6 +200,7 @@ You are an expert career assistant. Write a personalized and professional cover 
           input: aiPrompt,
           token_input: tokenInput,
           token_output: tokenOutput,
+          "time (s)": generationTimeSeconds, // ✅ track generation time in seconds
         },
       ]);
 
@@ -188,8 +209,8 @@ You are an expert career assistant. Write a personalized and professional cover 
       continue;
     }
 
-    // 13. Insert generated cover letter into "cover_letters" table
-    const { data: inserted, error: insertError } = await supabase
+    // 15. Insert generated cover letter into "cover_letters" table
+    const { data: insertedCoverLetter, error: insertError } = await supabase
       .from("cover_letters")
       .insert([
         {
@@ -198,14 +219,35 @@ You are an expert career assistant. Write a personalized and professional cover 
           cover_letter: generatedLetter,
         },
       ])
-      .select();
+      .select()
+      .single();
 
-    if (insertError) {
-      console.error("Error inserting cover letter:", insertError.message);
+    if (insertError || !insertedCoverLetter) {
+      console.error("Error inserting cover letter:", insertError?.message);
       continue;
     }
 
-    results.push(inserted[0]);
+    // 16. Insert into tracking table — link to cover letter
+    const { error: trackingError } = await supabase
+      .from("tracking")
+      .upsert(
+        {
+          user_id,
+          job_id: job.id,
+          status: "not_applied",
+          auto_favourite: true,
+          cover_letter_id: insertedCoverLetter.id, // Link generated cover letter
+        },
+        {
+          onConflict: "user_id,job_id", // Avoid duplicates by updating if record already exists
+        }
+      );
+
+    if (trackingError) {
+      console.error("Error inserting into tracking:", trackingError.message);
+    }
+
+    results.push(insertedCoverLetter);
   }
 
   return NextResponse.json({ success: true, data: results });

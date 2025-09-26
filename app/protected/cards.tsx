@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
+import { useRouter } from "next/navigation";
 
 export interface UnifiedCoverLetter {
   id: string;
@@ -40,6 +41,7 @@ export interface interfaceCoverLetter {
 
 export default function Cards() {
   const supabase = createClient();
+  const router = useRouter();
 
   const [allJobs, setAllJobs] = useState<UnifiedCoverLetter[]>([]);
   const [selectedJob, setSelectedJob] = useState<UnifiedCoverLetter | null>(
@@ -53,6 +55,9 @@ export default function Cards() {
   // Cover letters
   const [coverLetters, setCoverLetters] = useState<interfaceCoverLetter[]>([]);
 
+  // Saved jobs
+  const [savedJobs, setSavedJobs] = useState<string[]>([]);
+
   // Pagination
   const PAGE_SIZE = 20;
   const [page, setPage] = useState(1);
@@ -62,7 +67,6 @@ export default function Cards() {
   // Filters & Search
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCompany, setSelectedCompany] = useState("all");
-  const [selectedJobType, setSelectedJobType] = useState("all");
 
   // ✅ Multi-select for categories & locations
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -71,11 +75,10 @@ export default function Cards() {
   // Filter options
   const [companyOptions, setCompanyOptions] = useState<string[]>([]);
   const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
-  const [jobTypeOptions, setJobTypeOptions] = useState<string[]>([]);
   const [locationOptions, setLocationOptions] = useState<string[]>([]);
 
   /**
-   * Fetch jobs, companies, and cover letters
+   * Fetch jobs, companies, cover letters, and saved jobs
    */
   const fetchJobs = useCallback(async () => {
     try {
@@ -99,10 +102,22 @@ export default function Cards() {
       if (lettersError) throw lettersError;
       setCoverLetters(letters || []);
 
-      // 2. Fetch jobs (newest first)
+      // 2. Fetch saved jobs (tracking table)
+      const { data: tracking, error: trackingError } = await supabase
+        .from("tracking")
+        .select("job_id")
+        .eq("user_id", user.id);
+
+      if (trackingError) throw trackingError;
+      setSavedJobs(tracking?.map((t) => t.job_id) || []);
+
+      // 3. Fetch jobs (newest first)
+      const today = new Date().toISOString(); // Current date/time in ISO format
+
       const { data: jobs, error: jobsError } = await supabase
         .from("jobs")
         .select("*")
+        .or(`deadline.gte.${today},deadline.is.null`) // ✅ Include future deadlines OR no deadline
         .order("created_at", { ascending: false });
 
       if (jobsError) throw jobsError;
@@ -111,7 +126,7 @@ export default function Cards() {
         return;
       }
 
-      // 3. Fetch companies
+      // 4. Fetch companies
       const { data: companies, error: companiesError } = await supabase
         .from("companies")
         .select("id, name");
@@ -126,7 +141,7 @@ export default function Cards() {
         {}
       );
 
-      // 4. Merge jobs and cover letters
+      // 5. Merge jobs and cover letters
       const unified: UnifiedCoverLetter[] = jobs.map((job) => {
         const jobCoverLetter = letters?.find(
           (letter) => letter.job_id === job.id
@@ -148,17 +163,12 @@ export default function Cards() {
 
       setAllJobs(unified);
 
-      // 5. Build filter options
+      // 6. Build filter options
       setCompanyOptions(
         [...new Set(unified.map((j) => j.company_name))].sort()
       );
-
       setCategoryOptions(
         [...new Set(unified.map((j) => j.category || "Uncategorized"))].sort()
-      );
-
-      setJobTypeOptions(
-        [...new Set(unified.map((j) => j.job_type || "Other"))].sort()
       );
 
       // Extract unique locations
@@ -206,16 +216,11 @@ export default function Cards() {
       const matchesCompany =
         selectedCompany !== "all" ? job.company_name === selectedCompany : true;
 
-      const matchesJobType =
-        selectedJobType !== "all" ? job.job_type === selectedJobType : true;
-
-      // ✅ Multi-category filtering
       const matchesCategory =
         selectedCategories.length > 0
           ? selectedCategories.includes(job.category)
           : true;
 
-      // ✅ Multi-location filtering
       const jobLocations = job.location
         ? job.location.split(",").map((loc) => loc.trim().toLowerCase())
         : [];
@@ -228,11 +233,7 @@ export default function Cards() {
           : true;
 
       return (
-        matchesSearch &&
-        matchesCompany &&
-        matchesCategory &&
-        matchesJobType &&
-        matchesLocation
+        matchesSearch && matchesCompany && matchesCategory && matchesLocation
       );
     });
   }, [
@@ -240,7 +241,6 @@ export default function Cards() {
     searchTerm,
     selectedCompany,
     selectedCategories,
-    selectedJobType,
     selectedLocations,
   ]);
 
@@ -268,6 +268,9 @@ export default function Cards() {
     setLoading(true);
     setCurrentGeneratingId(job.job_id);
 
+    // heads-up toast (appears top-right if your <Toaster /> is configured there)
+    toast.info("Cover letter generation takes about ~1 min");
+
     try {
       const res = await fetch("/api/generate-cover-letters", {
         method: "POST",
@@ -289,15 +292,64 @@ export default function Cards() {
         toast.error(`Error generating cover letter for ${job.job_title}`);
       } else {
         toast.success(`Cover letter generated for ${job.job_title}`);
+        await fetchJobs();
       }
-
-      await fetchJobs();
     } catch (e) {
       console.error(e);
       toast.error("Something went wrong while generating cover letter");
     } finally {
       setLoading(false);
       setCurrentGeneratingId(null);
+    }
+  };
+
+  /**
+   * Toggle save or unsave job
+   */
+  const handleToggleSaveJob = async (job: UnifiedCoverLetter) => {
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      toast.error("You must be logged in to manage saved jobs.");
+      return;
+    }
+
+    if (savedJobs.includes(job.job_id)) {
+      // Unsave job
+      const { error } = await supabase
+        .from("tracking")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("job_id", job.job_id);
+
+      if (error) {
+        toast.error("Failed to unsave job.");
+        return;
+      }
+
+      toast.success(`${job.job_title} removed from saved jobs.`);
+      setSavedJobs((prev) => prev.filter((id) => id !== job.job_id));
+    } else {
+      // Save job
+      const { error } = await supabase.from("tracking").insert([
+        {
+          user_id: user.id,
+          job_id: job.job_id,
+          status: "Not Applied",
+          auto_favourite: false,
+        },
+      ]);
+
+      if (error) {
+        toast.error("Failed to save job.");
+        return;
+      }
+
+      toast.success(`${job.job_title} saved successfully!`);
+      setSavedJobs((prev) => [...prev, job.job_id]);
     }
   };
 
@@ -337,7 +389,7 @@ export default function Cards() {
               </SelectContent>
             </Select>
 
-            {/* ✅ Multi-Select Categories */}
+            {/* Multi-Select Categories */}
             <Select
               value={selectedCategories.join(",")}
               onValueChange={() => {}}
@@ -376,22 +428,7 @@ export default function Cards() {
               </SelectContent>
             </Select>
 
-            {/* Single-select Job Type */}
-            <Select value={selectedJobType} onValueChange={setSelectedJobType}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Job Type" />
-              </SelectTrigger>
-              <SelectContent className="max-h-60 overflow-auto">
-                <SelectItem value="all">All Job Types</SelectItem>
-                {jobTypeOptions.map((type) => (
-                  <SelectItem key={type} value={type}>
-                    {type}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {/* ✅ Multi-Select Locations */}
+            {/* Multi-Select Locations */}
             <Select
               value={selectedLocations.join(",")}
               onValueChange={() => {}}
@@ -436,7 +473,7 @@ export default function Cards() {
       {/* MAIN CONTENT */}
       <div className="flex flex-1 overflow-hidden">
         {/* LEFT: Job list */}
-        <div className="w-full md:w-1/3 border-r flex flex-col">
+        <div className="w-full md:w-1/4 border-r flex flex-col">
           <div
             ref={jobListRef}
             className="flex-1 overflow-y-auto p-4 space-y-4"
@@ -461,13 +498,11 @@ export default function Cards() {
                   }`}
                   onClick={() => handleSelectJob(job)}
                 >
-                  {/* White dot if cover letter exists */}
-                  {job.cover_letter && (
-                    <div
-                      className="absolute top-2 right-2 w-2.5 h-2.5 bg-white rounded-full shadow"
-                      title="Cover letter generated"
-                    />
+                  {/* White dot indicator */}
+                  {savedJobs.includes(job.job_id) && (
+                    <div className="absolute top-2 right-2 w-3 h-3 bg-white rounded-full shadow" />
                   )}
+
                   <h3 className="font-semibold">{job.job_title}</h3>
                   <p className="text-sm text-muted-foreground">
                     {job.company_name}
@@ -510,9 +545,52 @@ export default function Cards() {
         <div className="flex-1 overflow-y-auto p-6">
           {selectedJob ? (
             <>
-              <h2 className="text-2xl font-bold mb-2">
-                {selectedJob.job_title}
-              </h2>
+              {/* Header with buttons */}
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-2xl font-bold">
+                    {selectedJob.job_title}
+                  </h2>
+                  {savedJobs.includes(selectedJob.job_id) && (
+                    <span className="bg-green-100 text-green-800 text-xs font-semibold px-2 py-1 rounded">
+                      Saved
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex gap-2">
+                  {/* Cover Letter Logic */}
+                  {coverLetters.find(
+                    (cl) => cl.job_id === selectedJob.job_id
+                  ) ? (
+                    <Button
+                      onClick={() => router.push("/protected/cvs-and-letters")}
+                    >
+                      View Cover Letter
+                    </Button>
+                  ) : currentGeneratingId === selectedJob.job_id ? (
+                    <Button disabled>
+                      <Loader2Icon className="w-4 h-4 mr-2 animate-spin" />
+                      Generating...
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={() => handleGenerateCoverLetter(selectedJob)}
+                    >
+                      Generate Cover Letter
+                    </Button>
+                  )}
+
+                  {/* Toggle Save/Unsave Button */}
+                  <Button
+                    variant="outline"
+                    onClick={() => handleToggleSaveJob(selectedJob)}
+                  >
+                    {savedJobs.includes(selectedJob.job_id) ? "Unsave" : "Save"}
+                  </Button>
+                </div>
+              </div>
+
               <p className="text-lg text-muted-foreground mb-4">
                 {selectedJob.company_name}
               </p>
@@ -526,7 +604,7 @@ export default function Cards() {
                 </p>
               </div>
 
-              <p className="text-sm mb-2">
+              <p className="text-sm mb-4">
                 Posted:{" "}
                 <span className="font-medium">
                   {format(new Date(selectedJob.created_at), "EEE, do MMM yyyy")}
@@ -544,59 +622,64 @@ export default function Cards() {
                 </a>
               )}
 
-              {/* Description */}
-              <div className="prose max-w-none mb-6 space-y-4">
-                {selectedJob.description ? (
-                  selectedJob.description
-                    .split(/\n\s*\n/)
-                    .map((paragraph, idx) => (
-                      <p
-                        key={idx}
-                        className="whitespace-pre-wrap leading-relaxed"
-                      >
-                        {paragraph.trim()}
-                      </p>
-                    ))
-                ) : (
-                  <p className="text-muted-foreground">
-                    No description available.
-                  </p>
-                )}
+              {/* Job Description */}
+              <div className="prose max-w-none space-y-4">
+                {selectedJob.description
+                  ? selectedJob.description
+                      .split(/\n\s*\n/)
+                      .map((block, idx) => {
+                        const lines = block
+                          .split("\n")
+                          .map((l) => l.trim())
+                          .filter(Boolean);
+
+                        const hasBullets = lines.some((l) => /^-\s+/.test(l));
+                        const boldify = (s: string) =>
+                          s.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+
+                        if (hasBullets) {
+                          const headingLines = lines.filter(
+                            (l) => !/^- /.test(l)
+                          );
+                          const bulletLines = lines
+                            .filter((l) => /^- /.test(l))
+                            .map((l) => l.replace(/^- /, ""));
+
+                          return (
+                            <div key={idx} className="space-y-2">
+                              {headingLines.length > 0 && (
+                                <div
+                                  className="text-sm leading-relaxed"
+                                  dangerouslySetInnerHTML={{
+                                    __html: boldify(headingLines.join("<br/>")),
+                                  }}
+                                />
+                              )}
+                              <ul className="list-disc space-y-1 text-sm ml-6">
+                                {bulletLines.map((li, i) => (
+                                  <li
+                                    key={i}
+                                    dangerouslySetInnerHTML={{
+                                      __html: boldify(li),
+                                    }}
+                                  />
+                                ))}
+                              </ul>
+                            </div>
+                          );
+                        } else {
+                          const html = boldify(lines.join("\n"));
+                          return (
+                            <div
+                              key={idx}
+                              className="whitespace-pre-wrap leading-relaxed text-sm"
+                              dangerouslySetInnerHTML={{ __html: html }}
+                            />
+                          );
+                        }
+                      })
+                  : "No description available."}
               </div>
-
-              {/* Cover Letter Display */}
-              {coverLetters.find((cl) => cl.job_id === selectedJob.job_id) ? (
-                <div className="mb-6">
-                  <h3 className="text-lg font-semibold mb-2">
-                    Generated Cover Letter
-                  </h3>
-                  <pre className="p-4 bg-gray-100 dark:bg-gray-900 rounded text-sm whitespace-pre-wrap">
-                    {
-                      coverLetters.find(
-                        (cl) => cl.job_id === selectedJob.job_id
-                      )?.cover_letter
-                    }
-                  </pre>
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground mb-4">
-                  No cover letter generated yet.
-                </p>
-              )}
-
-              {/* Action Button */}
-              {coverLetters.find(
-                (cl) => cl.job_id === selectedJob.job_id
-              ) ? null : currentGeneratingId === selectedJob.job_id ? (
-                <Button disabled>
-                  <Loader2Icon className="w-4 h-4 mr-2 animate-spin" />
-                  Generating...
-                </Button>
-              ) : (
-                <Button onClick={() => handleGenerateCoverLetter(selectedJob)}>
-                  Generate Cover Letter
-                </Button>
-              )}
             </>
           ) : (
             <div className="text-muted-foreground flex items-center justify-center h-full">
