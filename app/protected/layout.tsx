@@ -17,7 +17,7 @@ export default function ProtectedLayout({
         <div className="w-full flex justify-between items-center px-5 text-sm">
           {/* Left Section: Logo */}
           <div className="flex gap-5 items-center font-semibold">
-            <Link href="/protected">PlacementCracker</Link>
+            <Link href="/">PlacementCracker</Link>
           </div>
 
           {/* Center Section: Navigation Links */}
