@@ -221,7 +221,9 @@ export default function TrackerPage() {
                       <Button
                         size="sm"
                         onClick={() =>
-                          router.push("/protected/cvs-and-letters")
+                          router.push(
+                            `/protected/cvs-and-letters?job_id=${row.job.id}`
+                          )
                         }
                       >
                         View Cover Letter

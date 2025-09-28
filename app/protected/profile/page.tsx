@@ -2,8 +2,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
 // Components for user data
-import PersonalInformation from "../personal-information";
-import MetaInformation from "../projects-clients";
+import PersonalInformation from "./components/personal-information";
+import MetaInformation from "./components/user-information";
 
 export default async function ProfilePage() {
   const supabase = await createClient();

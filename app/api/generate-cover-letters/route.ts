@@ -12,7 +12,7 @@ export async function POST(req: Request) {
     {
       cookies: {
         get: async (name: string) => (await cookieStore).get(name)?.value,
-        set: () => {},    // no-op
+        set: () => {}, // no-op
         remove: () => {}, // no-op
       },
     }
@@ -51,9 +51,7 @@ export async function POST(req: Request) {
 
   if (requestsToday && requestsToday.length >= 15) {
     return NextResponse.json(
-      {
-        error: "Rate limit reached, wait until midnight to start again.",
-      },
+      { error: "Rate limit reached, wait until midnight to start again." },
       { status: 429 }
     );
   }
@@ -85,6 +83,38 @@ export async function POST(req: Request) {
       { status: 404 }
     );
   }
+
+  // ✅ Parse and format JSON fields
+  const formatExtraCurriculars = (raw: string) => {
+    try {
+      const data = JSON.parse(raw || "[]");
+      if (!Array.isArray(data) || data.length === 0) return "None provided";
+      return data
+        .map((item: { title: string; description: string }) =>
+          `• ${item.title} - ${item.description}`
+        )
+        .join("\n");
+    } catch {
+      return "None provided";
+    }
+  };
+
+  const formatPersonalProjects = (raw: string) => {
+    try {
+      const data = JSON.parse(raw || "[]");
+      if (!Array.isArray(data) || data.length === 0) return "None provided";
+      return data
+        .map((item: { title: string; description: string }) =>
+          `• ${item.title} - ${item.description}`
+        )
+        .join("\n");
+    } catch {
+      return "None provided";
+    }
+  };
+
+  const formattedExtraCurriculars = formatExtraCurriculars(userInfo.extra_curriculars);
+  const formattedPersonalProjects = formatPersonalProjects(userInfo.personal_projects);
 
   // 6. Initialize OpenAI
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -129,10 +159,14 @@ You are an expert career assistant. Write a personalized, professional cover let
 - Degree: ${individualInfo.degree}
 
 **User Technical Information:**
-- Technical Skills: ${userInfo.technical_skills}
-- Soft Skills: ${userInfo.soft_skills}
-- Extra Curriculars: ${userInfo.extra_curriculars}
-- Personal Projects: ${userInfo.personal_projects}
+- Technical Skills: ${userInfo.technical_skills || "None provided"}
+- Soft Skills: ${userInfo.soft_skills || "None provided"}
+
+**Extra Curricular Activities:**
+${formattedExtraCurriculars}
+
+**Personal Projects:**
+${formattedPersonalProjects}
 
 **Job Information:**
 - Job Title: ${jobData.job_title}

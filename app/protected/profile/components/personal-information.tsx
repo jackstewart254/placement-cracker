@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
 
 // Updated type to match the `individual_information` table
 interface IndividualInformation {
@@ -42,7 +44,7 @@ const PersonalInformation = () => {
   const yearRegex = /^[1-9]\d*$/; // positive number greater than 0
   const degreeRegex = /^(BSc|BA|MSc|MA|PhD|MBA)\b/i; // must start with these degree types
 
-  // Fetch the user's information when the component mounts
+  /* ---------- FETCH USER DATA ---------- */
   useEffect(() => {
     const fetchUserInfo = async () => {
       setLoading(true);
@@ -89,7 +91,7 @@ const PersonalInformation = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabase]);
 
-  // Handle changes to fields and mark form as dirty
+  /* ---------- FIELD HANDLERS ---------- */
   const handleChange = (field: keyof IndividualInformation, value: string) => {
     const updatedUserInfo = { ...userInfo, [field]: value };
     setUserInfo(updatedUserInfo);
@@ -103,7 +105,7 @@ const PersonalInformation = () => {
     validateField(field, value);
   };
 
-  // Validate individual fields
+  /* ---------- VALIDATION ---------- */
   const validateField = (field: keyof IndividualInformation, value: string) => {
     let errorMessage = "";
 
@@ -123,7 +125,7 @@ const PersonalInformation = () => {
     setErrors((prev) => ({ ...prev, [field]: errorMessage }));
   };
 
-  // Save or update the user's information
+  /* ---------- SAVE DATA ---------- */
   const handleSave = async () => {
     setLoading(true);
 
@@ -171,71 +173,59 @@ const PersonalInformation = () => {
   };
 
   return (
-    <div className="flex flex-col gap-4 w-full">
+    <div className="flex flex-col gap-6 w-full">
       {/* Full Name */}
-      <div>
-        <input
-          type="text"
-          placeholder="Full Name"
-          value={userInfo.full_name}
-          onChange={(e) => handleChange("full_name", e.target.value)}
-          className={`bg-accent text-sm p-3 px-5 rounded-md text-foreground w-full ${
-            errors.full_name ? "border border-red-500" : ""
-          }`}
-        />
-        {errors.full_name && (
-          <p className="text-red-500 text-xs mt-1">{errors.full_name}</p>
-        )}
-      </div>
+      <Input
+        type="text"
+        placeholder="Full Name"
+        value={userInfo.full_name}
+        onChange={(e) => handleChange("full_name", e.target.value)}
+        className={errors.full_name ? "border-red-500" : ""}
+      />
+      {errors.full_name && (
+        <p className="text-red-500 text-xs mt-1">{errors.full_name}</p>
+      )}
 
       {/* University */}
-      <input
+      <Input
         type="text"
         placeholder="University"
         value={userInfo.university}
         onChange={(e) => handleChange("university", e.target.value)}
-        className="bg-accent text-sm p-3 px-5 rounded-md text-foreground w-full"
       />
 
       {/* Year of Study */}
-      <div>
-        <input
-          type="number"
-          placeholder="Year of Study"
-          value={userInfo.year_of_study}
-          onChange={(e) => handleChange("year_of_study", e.target.value)}
-          className={`bg-accent text-sm p-3 px-5 rounded-md text-foreground w-full ${
-            errors.year_of_study ? "border border-red-500" : ""
-          }`}
-        />
-        {errors.year_of_study && (
-          <p className="text-red-500 text-xs mt-1">{errors.year_of_study}</p>
-        )}
-      </div>
+      <Input
+        type="number"
+        placeholder="Year of Study"
+        value={userInfo.year_of_study}
+        onChange={(e) => handleChange("year_of_study", e.target.value)}
+        className={errors.year_of_study ? "border-red-500" : ""}
+      />
+      {errors.year_of_study && (
+        <p className="text-red-500 text-xs mt-1">{errors.year_of_study}</p>
+      )}
 
       {/* Degree */}
-      <div>
-        <input
-          type="text"
-          placeholder="Degree e.g. BSc Computer Science Hons"
-          value={userInfo.degree}
-          onChange={(e) => handleChange("degree", e.target.value)}
-          className={`bg-accent text-sm p-3 px-5 rounded-md text-foreground w-full ${
-            errors.degree ? "border border-red-500" : ""
-          }`}
-        />
-        {errors.degree && (
-          <p className="text-red-500 text-xs mt-1">{errors.degree}</p>
-        )}
-      </div>
+      <Input
+        type="text"
+        placeholder="Degree e.g. BSc Computer Science Hons"
+        value={userInfo.degree}
+        onChange={(e) => handleChange("degree", e.target.value)}
+        className={errors.degree ? "border-red-500" : ""}
+      />
+      {errors.degree && (
+        <p className="text-red-500 text-xs mt-1">{errors.degree}</p>
+      )}
+
+      <Separator />
 
       {/* Save Button */}
       {isDirty && (
         <Button
-          variant="default"
           onClick={handleSave}
           disabled={loading || Object.values(errors).some((err) => err !== "")}
-          className="px-4 py-2 w-auto"
+          className="self-start bg-green-500 hover:bg-green-600 text-white"
         >
           {loading ? "Saving..." : "Save"}
         </Button>

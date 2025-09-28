@@ -564,7 +564,11 @@ export default function Cards() {
                     (cl) => cl.job_id === selectedJob.job_id
                   ) ? (
                     <Button
-                      onClick={() => router.push("/protected/cvs-and-letters")}
+                      onClick={() =>
+                        router.push(
+                          `/protected/cvs-and-letters?job_id=${selectedJob.job_id}`
+                        )
+                      }
                     >
                       View Cover Letter
                     </Button>
