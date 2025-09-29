@@ -476,7 +476,7 @@ export default function Cards() {
   };
 
   return (
-    <div className="flex flex-col h-full w-full p-20">
+    <div className="flex flex-col h-full w-full">
       {/* Top Bar: Search & Filters */}
       <div className="p-4 border-b bg-background">
         <div className="flex flex-col lg:flex-row gap-4">
