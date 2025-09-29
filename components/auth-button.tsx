@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { Button } from "./ui/button";
 import { createClient } from "@/lib/supabase/server";
-import { LogoutButton } from "./logout-button";
 import { EnvVarWarning } from "./env-var-warning";
 import { hasEnvVars } from "@/lib/utils";
 
@@ -27,7 +26,6 @@ export async function AuthButton() {
     );
   }
 
-  // If user is logged in → show navigation and logout button
   return (
     <div className="flex gap-6 items-center">
       <Link

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { LogoutButton } from "@/components/logout-button";
 
 // Components for user data
 import PersonalInformation from "./components/personal-information";
@@ -36,6 +37,7 @@ export default async function ProfilePage() {
         </p>
         <MetaInformation />
       </div>
+      <LogoutButton />
     </div>
   );
 }

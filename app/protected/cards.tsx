@@ -17,6 +17,12 @@ import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 import { useRouter } from "next/navigation";
 import { Separator } from "@/components/ui/separator";
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+} from "@/components/ui/tooltip";
 
 export interface UnifiedCoverLetter {
   id: string;
@@ -57,6 +63,11 @@ export default function Cards() {
 
   const [coverLetters, setCoverLetters] = useState<interfaceCoverLetter[]>([]);
   const [savedJobs, setSavedJobs] = useState<string[]>([]);
+  const [user, setUser] = useState<any>(null); // NEW: Track authenticated user
+  const [checkingUser, setCheckingUser] = useState(true); // NEW: Track loading state
+
+  const [missingFields, setMissingFields] = useState<string[]>([]);
+  const [userChecked, setUserChecked] = useState(false);
 
   const PAGE_SIZE = 20;
   const [page, setPage] = useState(1);
@@ -81,34 +92,32 @@ export default function Cards() {
     try {
       setLoading(true);
 
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-      if (userError || !user) {
-        toast.error("Failed to fetch user information.");
-        return;
+      let letters = [];
+      let tracking = [];
+
+      // Only fetch cover letters & saved jobs if logged in
+      if (user) {
+        const { data: coverLettersData } = await supabase
+          .from("cover_letters")
+          .select("*")
+          .eq("user_id", user.id);
+
+        letters = coverLettersData || [];
+
+        const { data: trackingData } = await supabase
+          .from("tracking")
+          .select("job_id")
+          .eq("user_id", user.id);
+
+        tracking = trackingData || [];
+        setCoverLetters(letters);
+        setSavedJobs(tracking.map((t) => t.job_id));
+      } else {
+        setCoverLetters([]);
+        setSavedJobs([]);
       }
 
-      // 1. Fetch cover letters
-      const { data: letters, error: lettersError } = await supabase
-        .from("cover_letters")
-        .select("*")
-        .eq("user_id", user.id);
-
-      if (lettersError) throw lettersError;
-      setCoverLetters(letters || []);
-
-      // 2. Fetch saved jobs
-      const { data: tracking, error: trackingError } = await supabase
-        .from("tracking")
-        .select("job_id")
-        .eq("user_id", user.id);
-
-      if (trackingError) throw trackingError;
-      setSavedJobs(tracking?.map((t) => t.job_id) || []);
-
-      // 3. Fetch jobs
+      // Fetch jobs (always visible)
       const today = new Date().toISOString();
       const { data: jobs, error: jobsError } = await supabase
         .from("jobs")
@@ -117,17 +126,11 @@ export default function Cards() {
         .order("created_at", { ascending: false });
 
       if (jobsError) throw jobsError;
-      if (!jobs || jobs.length === 0) {
-        setAllJobs([]);
-        return;
-      }
 
-      // 4. Fetch companies
-      const { data: companies, error: companiesError } = await supabase
+      // Fetch companies
+      const { data: companies } = await supabase
         .from("companies")
         .select("id, name");
-
-      if (companiesError) throw companiesError;
 
       const companyMap = (companies || []).reduce<Record<string, string>>(
         (acc, c) => {
@@ -137,9 +140,9 @@ export default function Cards() {
         {}
       );
 
-      // 5. Merge jobs
-      const unified: UnifiedCoverLetter[] = jobs.map((job) => {
-        const jobCoverLetter = letters?.find(
+      // Merge jobs
+      const unified: UnifiedCoverLetter[] = (jobs || []).map((job) => {
+        const jobCoverLetter = letters.find(
           (letter) => letter.job_id === job.id
         );
         return {
@@ -161,7 +164,7 @@ export default function Cards() {
 
       setAllJobs(unified);
 
-      // 6. Build filter options
+      // Filter dropdowns
       setCompanyOptions(
         [...new Set(unified.map((j) => j.company_name))].sort()
       );
@@ -186,7 +189,84 @@ export default function Cards() {
     } finally {
       setLoading(false);
     }
-  }, [supabase, selectedJob]);
+  }, [supabase, user, selectedJob]);
+
+  const promptSignUp = () => {
+    toast.error("Please create an account to use this feature.");
+  };
+
+  /**
+   * Fetch user_information to determine missing fields
+   */
+  const fetchUserInformation = useCallback(async () => {
+    try {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError || !user) {
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("user_information")
+        .select(
+          "technical_skills, soft_skills, extra_curriculars, personal_projects"
+        )
+        .eq("user_id", user.id)
+        .single();
+
+      if (error && error.code !== "PGRST116") {
+        toast.error("Error fetching profile information");
+        console.error(error);
+        return;
+      }
+
+      const fields = [
+        { key: "technical_skills", label: "Technical Skills" },
+        { key: "soft_skills", label: "Soft Skills" },
+        { key: "extra_curriculars", label: "Extra Curriculars" },
+        { key: "personal_projects", label: "Personal Projects" },
+      ];
+
+      const missing = fields
+        .filter((f) => !data || !data[f.key] || data[f.key].trim() === "")
+        .map((f) => f.label);
+
+      setMissingFields(missing);
+    } catch (err) {
+      console.error("Error fetching user information:", err);
+    } finally {
+      setUserChecked(true);
+    }
+  }, [supabase]);
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      setCheckingUser(true);
+
+      const { data, error } = await supabase.auth.getUser();
+
+      if (error?.message === "Auth session missing!") {
+        // This just means no one is logged in — not a true error
+        setUser(null);
+      } else if (error) {
+        // Other unexpected auth errors
+        console.error("Unexpected auth error:", error.message);
+      } else {
+        setUser(data.user);
+      }
+
+      setCheckingUser(false);
+    };
+
+    fetchUser();
+  }, [supabase]);
+
+  useEffect(() => {
+    fetchUserInformation();
+  }, [fetchUserInformation]);
 
   useEffect(() => {
     fetchJobs();
@@ -248,6 +328,68 @@ export default function Cards() {
 
   const handleSelectJob = (job: UnifiedCoverLetter) => {
     setSelectedJob(job);
+  };
+
+  /**
+   * Generate Cover Letter Button
+   * Disabled if user information is incomplete
+   */
+
+  const renderGenerateCoverLetterButton = (job: UnifiedCoverLetter) => {
+    if (!user) {
+      return (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="cursor-not-allowed">
+              <Button className="pointer-events-none opacity-50">
+                Generate Cover Letter
+              </Button>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Please sign up to generate cover letters</p>
+          </TooltipContent>
+        </Tooltip>
+      );
+    }
+
+    // existing missing fields logic
+    const isDisabled = missingFields.length > 0;
+
+    const button = (
+      <div className={isDisabled ? "cursor-not-allowed" : ""}>
+        <Button
+          className={isDisabled ? "pointer-events-none opacity-50" : ""}
+          onClick={() => !isDisabled && handleGenerateCoverLetter(job)}
+        >
+          {currentGeneratingId === job.job_id ? (
+            <>
+              <Loader2Icon className="w-4 h-4 mr-2 animate-spin" />
+              Generating...
+            </>
+          ) : (
+            "Generate Cover Letter"
+          )}
+        </Button>
+      </div>
+    );
+
+    if (!isDisabled) return button;
+
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>{button}</TooltipTrigger>
+        <TooltipContent className="max-w-xs">
+          <p>
+            Cannot generate cover letter. Please fill out the following fields
+            in your profile:
+          </p>
+          <p className="mt-1 text-red-500 font-medium">
+            {missingFields.join(", ")}
+          </p>
+        </TooltipContent>
+      </Tooltip>
+    );
   };
 
   const handleGenerateCoverLetter = async (job: UnifiedCoverLetter) => {
@@ -568,29 +710,30 @@ export default function Cards() {
                       >
                         View Cover Letter
                       </Button>
-                    ) : currentGeneratingId === selectedJob.job_id ? (
-                      <Button disabled>
-                        <Loader2Icon className="w-4 h-4 mr-2 animate-spin" />
-                        Generating...
-                      </Button>
                     ) : (
-                      <Button
-                        onClick={() => handleGenerateCoverLetter(selectedJob)}
-                      >
-                        Generate Cover Letter
-                      </Button>
+                      renderGenerateCoverLetterButton(selectedJob)
                     )}
 
                     {savedJobs.includes(selectedJob.job_id) ? (
                       <Button
                         variant="outline"
-                        onClick={() => handleToggleSaveJob(selectedJob)}
+                        onClick={() =>
+                          user
+                            ? handleToggleSaveJob(selectedJob)
+                            : promptSignUp()
+                        }
                         className="px-4"
                       >
                         Unsave
                       </Button>
                     ) : (
-                      <Button onClick={() => handleToggleSaveJob(selectedJob)}>
+                      <Button
+                        onClick={() =>
+                          user
+                            ? handleToggleSaveJob(selectedJob)
+                            : promptSignUp()
+                        }
+                      >
                         Save
                       </Button>
                     )}
