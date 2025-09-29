@@ -11,6 +11,9 @@ interface AuthButtonClientProps {
   initialUser: any; // Supabase user object or null
 }
 
+const navLinkClass =
+  "relative text-white font-medium transition duration-300 hover:text-transparent hover:bg-clip-text hover:bg-gradient-to-r hover:from-blue-500 hover:to-purple-600";
+
 export function AuthButtonClient({ initialUser }: AuthButtonClientProps) {
   const supabase = createClient();
   const [user, setUser] = useState(initialUser);
@@ -31,53 +34,33 @@ export function AuthButtonClient({ initialUser }: AuthButtonClientProps) {
   return (
     <div className="flex gap-6 items-center">
       {/* ✅ Always visible Home link */}
-      <Link
-        href="/protected"
-        className="hover:text-primary transition-colors font-medium"
-      >
+      <Link href="/protected" className={navLinkClass}>
         Home
       </Link>
 
+      <Link href="/protected/chatbot" className={navLinkClass}>
+        Q-Answerer
+      </Link>
+      <Link href="/protected/tracker" className={navLinkClass}>
+        Tracker
+      </Link>
+
+      <Link href="/protected/cvs-and-letters" className={navLinkClass}>
+        CV's and Letters
+      </Link>
+
+      <Link href="/protected/profile" className={navLinkClass}>
+        Profile
+      </Link>
       {/* --- Logged Out State --- */}
       {!user ? (
         <div className="flex gap-2">
           <Button asChild size="sm" variant="outline">
             <Link href="/auth/login">Sign in</Link>
           </Button>
-          <Button asChild size="sm" variant="default">
-            <Link href="/auth/sign-up">Sign up</Link>
-          </Button>
         </div>
       ) : (
-        /* --- Logged In State --- */
         <>
-          <Link
-            href="/protected/chatbot"
-            className="hover:text-primary transition-colors font-medium"
-          >
-            Q-Answerer
-          </Link>
-          <Link
-            href="/protected/tracker"
-            className="hover:text-primary transition-colors font-medium"
-          >
-            Tracker
-          </Link>
-
-          <Link
-            href="/protected/cvs-and-letters"
-            className="hover:text-primary transition-colors font-medium"
-          >
-            CV's and Letters
-          </Link>
-
-          <Link
-            href="/protected/profile"
-            className="hover:text-primary transition-colors font-medium"
-          >
-            Profile
-          </Link>
-
           {!hasEnvVars && <EnvVarWarning />}
 
           {/* Optional Logout Button */}

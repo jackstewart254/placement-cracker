@@ -392,7 +392,7 @@ export default function ProfilePage() {
         applications automatically.
       </p>
 
-      <Accordion type="single" collapsible className="w-full" defaultValue="1">
+      <Accordion type="single" collapsible className="w-full">
         {/* -------- Personal Information Section -------- */}
         <AccordionItem value="1" className="border-b">
           <AccordionTrigger className="text-lg font-medium">

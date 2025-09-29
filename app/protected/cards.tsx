@@ -612,9 +612,9 @@ export default function Cards() {
               paginatedJobs.map((job) => (
                 <Card
                   key={job.job_id}
-                  className={`relative p-4 cursor-pointer transition border ${
+                  className={`relative p-[1px] rounded-lg transition-all duration-300 ${
                     selectedJob?.job_id === job.job_id
-                      ? "border-blue-500"
+                      ? "bg-gradient-to-r from-blue-500 to-purple-600"
                       : "hover:bg-muted"
                   }`}
                   onClick={() => handleSelectJob(job)}
@@ -623,8 +623,9 @@ export default function Cards() {
                   {savedJobs.includes(job.job_id) && (
                     <div className="absolute top-2 right-2 w-3 h-3 bg-white rounded-full shadow" />
                   )}
+                  {/* <div className="p-4 cursor-pointer rounded-lg bg-background transition-all duration-300 "> */}
 
-                  <div className="flex flex-col space-y-2">
+                  <div className="flex flex-col space-y-2 bg-background transition-all duration-300 cursor-pointer rounded-lg p-4">
                     {/* Job Title */}
                     <h3 className="font-semibold text-base">{job.job_title}</h3>
 
@@ -785,7 +786,7 @@ export default function Cards() {
                     href={selectedJob.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-blue-500 underline text-sm mb-4 inline-block"
+                    className="text-sm mb-4 inline-block bg-gradient-to-r from-blue-500 to-purple-600 bg-clip-text text-transparent underline decoration-transparent hover:decoration-blue-500 transition duration-300"
                   >
                     View Full Job Posting
                   </a>
