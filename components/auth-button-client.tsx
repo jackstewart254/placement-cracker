@@ -12,7 +12,7 @@ interface AuthButtonClientProps {
 }
 
 const navLinkClass =
-  "relative text-white font-medium transition duration-300 hover:text-transparent hover:bg-clip-text hover:bg-gradient-to-r hover:from-blue-500 hover:to-purple-600";
+  "relative font-medium transition duration-300 hover:text-transparent hover:bg-clip-text hover:bg-gradient-to-r hover:from-blue-500 hover:to-purple-600";
 
 export function AuthButtonClient({ initialUser }: AuthButtonClientProps) {
   const supabase = createClient();
