@@ -206,7 +206,6 @@ export default function Cards() {
       } = await supabase.auth.getUser();
 
       if (userError || !user) {
-        toast.error("Failed to fetch user info");
         return;
       }
 

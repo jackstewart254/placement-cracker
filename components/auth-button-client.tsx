@@ -52,6 +52,12 @@ export function AuthButtonClient({ initialUser }: AuthButtonClientProps) {
         /* --- Logged In State --- */
         <>
           <Link
+            href="/protected/chatbot"
+            className="hover:text-primary transition-colors font-medium"
+          >
+            Q-Answerer
+          </Link>
+          <Link
             href="/protected/tracker"
             className="hover:text-primary transition-colors font-medium"
           >
