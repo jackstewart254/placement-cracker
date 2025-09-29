@@ -3,9 +3,9 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { Loader2Icon, SearchIcon } from "lucide-react";
+import { Badge, Loader2Icon, SearchIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -16,6 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 import { useRouter } from "next/navigation";
+import { Separator } from "@/components/ui/separator";
 
 export interface UnifiedCoverLetter {
   id: string;
@@ -29,6 +30,8 @@ export interface UnifiedCoverLetter {
   description?: string;
   category?: string;
   job_type?: string;
+  salary?: string;
+  deadline?: Date;
 }
 
 export interface interfaceCoverLetter {
@@ -52,13 +55,9 @@ export default function Cards() {
     null
   );
 
-  // Cover letters
   const [coverLetters, setCoverLetters] = useState<interfaceCoverLetter[]>([]);
-
-  // Saved jobs
   const [savedJobs, setSavedJobs] = useState<string[]>([]);
 
-  // Pagination
   const PAGE_SIZE = 20;
   const [page, setPage] = useState(1);
 
@@ -67,12 +66,10 @@ export default function Cards() {
   // Filters & Search
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCompany, setSelectedCompany] = useState("all");
-
-  // ✅ Multi-select for categories & locations
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
 
-  // Filter options
+  // Options for dropdowns
   const [companyOptions, setCompanyOptions] = useState<string[]>([]);
   const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
   const [locationOptions, setLocationOptions] = useState<string[]>([]);
@@ -93,7 +90,7 @@ export default function Cards() {
         return;
       }
 
-      // 1. Fetch cover letters for current user
+      // 1. Fetch cover letters
       const { data: letters, error: lettersError } = await supabase
         .from("cover_letters")
         .select("*")
@@ -102,7 +99,7 @@ export default function Cards() {
       if (lettersError) throw lettersError;
       setCoverLetters(letters || []);
 
-      // 2. Fetch saved jobs (tracking table)
+      // 2. Fetch saved jobs
       const { data: tracking, error: trackingError } = await supabase
         .from("tracking")
         .select("job_id")
@@ -111,13 +108,12 @@ export default function Cards() {
       if (trackingError) throw trackingError;
       setSavedJobs(tracking?.map((t) => t.job_id) || []);
 
-      // 3. Fetch jobs (newest first)
-      const today = new Date().toISOString(); // Current date/time in ISO format
-
+      // 3. Fetch jobs
+      const today = new Date().toISOString();
       const { data: jobs, error: jobsError } = await supabase
         .from("jobs")
         .select("*")
-        .or(`deadline.gte.${today},deadline.is.null`) // ✅ Include future deadlines OR no deadline
+        .or(`deadline.gte.${today},deadline.is.null`)
         .order("created_at", { ascending: false });
 
       if (jobsError) throw jobsError;
@@ -141,7 +137,7 @@ export default function Cards() {
         {}
       );
 
-      // 5. Merge jobs and cover letters
+      // 5. Merge jobs
       const unified: UnifiedCoverLetter[] = jobs.map((job) => {
         const jobCoverLetter = letters?.find(
           (letter) => letter.job_id === job.id
@@ -158,6 +154,8 @@ export default function Cards() {
           job_type: job.job_type || "",
           url: job.url || "",
           cover_letter: jobCoverLetter?.cover_letter || undefined,
+          salary: job.salary,
+          deadline: job.deadline,
         };
       });
 
@@ -171,7 +169,6 @@ export default function Cards() {
         [...new Set(unified.map((j) => j.category || "Uncategorized"))].sort()
       );
 
-      // Extract unique locations
       const allLocations = unified
         .flatMap((job) =>
           job.location ? job.location.split(",").map((loc) => loc.trim()) : []
@@ -195,9 +192,7 @@ export default function Cards() {
     fetchJobs();
   }, [fetchJobs]);
 
-  /**
-   * Scroll to top when page changes
-   */
+  // Scroll to top on page change
   useEffect(() => {
     if (jobListRef.current) {
       jobListRef.current.scrollTo({ top: 0, behavior: "smooth" });
@@ -244,9 +239,6 @@ export default function Cards() {
     selectedLocations,
   ]);
 
-  /**
-   * Paginate
-   */
   const paginatedJobs = useMemo(() => {
     const start = (page - 1) * PAGE_SIZE;
     return filteredJobs.slice(start, start + PAGE_SIZE);
@@ -254,21 +246,13 @@ export default function Cards() {
 
   const totalPages = Math.ceil(filteredJobs.length / PAGE_SIZE);
 
-  /**
-   * Select a job
-   */
   const handleSelectJob = (job: UnifiedCoverLetter) => {
     setSelectedJob(job);
   };
 
-  /**
-   * Generate a cover letter
-   */
   const handleGenerateCoverLetter = async (job: UnifiedCoverLetter) => {
     setLoading(true);
     setCurrentGeneratingId(job.job_id);
-
-    // heads-up toast (appears top-right if your <Toaster /> is configured there)
     toast.info("Cover letter generation takes about ~1 min");
 
     try {
@@ -303,9 +287,6 @@ export default function Cards() {
     }
   };
 
-  /**
-   * Toggle save or unsave job
-   */
   const handleToggleSaveJob = async (job: UnifiedCoverLetter) => {
     const {
       data: { user },
@@ -318,7 +299,6 @@ export default function Cards() {
     }
 
     if (savedJobs.includes(job.job_id)) {
-      // Unsave job
       const { error } = await supabase
         .from("tracking")
         .delete()
@@ -333,7 +313,6 @@ export default function Cards() {
       toast.success(`${job.job_title} removed from saved jobs.`);
       setSavedJobs((prev) => prev.filter((id) => id !== job.job_id));
     } else {
-      // Save job
       const { error } = await supabase.from("tracking").insert([
         {
           user_id: user.id,
@@ -355,7 +334,7 @@ export default function Cards() {
 
   return (
     <div className="flex flex-col h-full w-full">
-      {/* TOP BAR: Search & Filters */}
+      {/* Top Bar: Search & Filters */}
       <div className="p-4 border-b bg-background">
         <div className="flex flex-col lg:flex-row gap-4">
           {/* Search */}
@@ -374,10 +353,10 @@ export default function Cards() {
 
           {/* Filters */}
           <div className="flex flex-wrap gap-2">
-            {/* Company */}
+            {/* Company Filter */}
             <Select value={selectedCompany} onValueChange={setSelectedCompany}>
               <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Company" />
+                <SelectValue placeholder="Filter by Company" />
               </SelectTrigger>
               <SelectContent className="max-h-60 overflow-auto">
                 <SelectItem value="all">All Companies</SelectItem>
@@ -470,9 +449,9 @@ export default function Cards() {
         </div>
       </div>
 
-      {/* MAIN CONTENT */}
+      {/* Main Content */}
       <div className="flex flex-1 overflow-hidden">
-        {/* LEFT: Job list */}
+        {/* LEFT: Job List */}
         <div className="w-full md:w-1/4 border-r flex flex-col">
           <div
             ref={jobListRef}
@@ -498,22 +477,38 @@ export default function Cards() {
                   }`}
                   onClick={() => handleSelectJob(job)}
                 >
-                  {/* White dot indicator */}
+                  {/* White dot indicator for saved jobs */}
                   {savedJobs.includes(job.job_id) && (
                     <div className="absolute top-2 right-2 w-3 h-3 bg-white rounded-full shadow" />
                   )}
 
-                  <h3 className="font-semibold">{job.job_title}</h3>
-                  <p className="text-sm text-muted-foreground">
-                    {job.company_name}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    {job.location} • {job.category}
-                  </p>
-                  <p className="text-xs mt-2">
-                    Posted:{" "}
-                    {format(new Date(job.created_at), "EEE, do MMM yyyy")}
-                  </p>
+                  <div className="flex flex-col space-y-2">
+                    {/* Job Title */}
+                    <h3 className="font-semibold text-base">{job.job_title}</h3>
+
+                    {/* Company */}
+                    <p className="text-sm text-muted-foreground">
+                      {job.company_name}
+                    </p>
+
+                    {/* Location & Category */}
+                    <p className="text-xs text-gray-500">
+                      {job.location} • {job.category || "Uncategorized"}
+                    </p>
+
+                    {/* Salary - More pronounced */}
+                    <p className="text-sm font-bold text-primary">
+                      {job.salary ? `${job.salary}` : "Salary: N/A"}
+                    </p>
+
+                    {/* Deadline */}
+                    <p className="text-xs text-gray-600">
+                      Deadline:{" "}
+                      {job.deadline
+                        ? format(new Date(job.deadline), "EEE, do MMM yyyy")
+                        : "No Deadline"}
+                    </p>
+                  </div>
                 </Card>
               ))
             )}
@@ -541,148 +536,180 @@ export default function Cards() {
           </div>
         </div>
 
-        {/* RIGHT: Job details */}
+        {/* RIGHT: Job Details */}
         <div className="flex-1 overflow-y-auto p-6">
           {selectedJob ? (
             <>
-              {/* Header with buttons */}
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-2xl font-bold">
-                    {selectedJob.job_title}
-                  </h2>
-                  {savedJobs.includes(selectedJob.job_id) && (
-                    <span className="bg-green-100 text-green-800 text-xs font-semibold px-2 py-1 rounded">
-                      Saved
-                    </span>
-                  )}
+              {/* Job Title and Actions */}
+              <div className="flex flex-col">
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between mb-6 gap-4">
+                  {/* Job Title and Company */}
+                  <div className="flex-1 min-w-0">
+                    <h2 className="text-2xl font-bold break-words">
+                      {selectedJob.job_title}
+                    </h2>
+
+                    <p className="text-sm text-muted-foreground break-words">
+                      {selectedJob.company_name}
+                    </p>
+                  </div>
+
+                  {/* Action Buttons - Always top right */}
+                  <div className="flex-shrink-0 flex gap-2">
+                    {coverLetters.find(
+                      (cl) => cl.job_id === selectedJob.job_id
+                    ) ? (
+                      <Button
+                        onClick={() =>
+                          router.push(
+                            `/protected/cvs-and-letters?job_id=${selectedJob.id}`
+                          )
+                        }
+                      >
+                        View Cover Letter
+                      </Button>
+                    ) : currentGeneratingId === selectedJob.job_id ? (
+                      <Button disabled>
+                        <Loader2Icon className="w-4 h-4 mr-2 animate-spin" />
+                        Generating...
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={() => handleGenerateCoverLetter(selectedJob)}
+                      >
+                        Generate Cover Letter
+                      </Button>
+                    )}
+
+                    {savedJobs.includes(selectedJob.job_id) ? (
+                      <Button
+                        variant="outline"
+                        onClick={() => handleToggleSaveJob(selectedJob)}
+                        className="px-4"
+                      >
+                        Unsave
+                      </Button>
+                    ) : (
+                      <Button onClick={() => handleToggleSaveJob(selectedJob)}>
+                        Save
+                      </Button>
+                    )}
+                  </div>
                 </div>
 
-                <div className="flex gap-2">
-                  {/* Cover Letter Logic */}
-                  {coverLetters.find(
-                    (cl) => cl.job_id === selectedJob.job_id
-                  ) ? (
-                    <Button
-                      onClick={() =>
-                        router.push(
-                          `/protected/cvs-and-letters?job_id=${selectedJob.job_id}`
-                        )
-                      }
-                    >
-                      View Cover Letter
-                    </Button>
-                  ) : currentGeneratingId === selectedJob.job_id ? (
-                    <Button disabled>
-                      <Loader2Icon className="w-4 h-4 mr-2 animate-spin" />
-                      Generating...
-                    </Button>
-                  ) : (
-                    <Button
-                      onClick={() => handleGenerateCoverLetter(selectedJob)}
-                    >
-                      Generate Cover Letter
-                    </Button>
-                  )}
+                <Separator />
 
-                  {/* Toggle Save/Unsave Button */}
-                  <Button
-                    variant="outline"
-                    onClick={() => handleToggleSaveJob(selectedJob)}
+                {/* Sleek Information Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 items-start my-4">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Location</p>
+                    <p className="font-medium">{selectedJob.location}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Category</p>
+                    <p className="font-medium">
+                      {selectedJob.category || "Uncategorized"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Salary</p>
+                    <p className="font-medium">{selectedJob.salary || "N/A"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Deadline</p>
+                    <p
+                      className={`font-medium ${
+                        selectedJob.deadline &&
+                        new Date(selectedJob.deadline).getTime() - Date.now() <
+                          7 * 24 * 60 * 60 * 1000 &&
+                        "text-red-600"
+                      }`}
+                    >
+                      {selectedJob.deadline
+                        ? format(
+                            new Date(selectedJob.deadline),
+                            "EEE, do MMM yyyy"
+                          )
+                        : "No Deadline"}
+                    </p>
+                  </div>
+                </div>
+
+                <Separator className="mb-4" />
+
+                {selectedJob.url && (
+                  <a
+                    href={selectedJob.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-500 underline text-sm mb-4 inline-block"
                   >
-                    {savedJobs.includes(selectedJob.job_id) ? "Unsave" : "Save"}
-                  </Button>
-                </div>
-              </div>
+                    View Full Job Posting
+                  </a>
+                )}
 
-              <p className="text-lg text-muted-foreground mb-4">
-                {selectedJob.company_name}
-              </p>
+                <Separator className="mb-4" />
 
-              <div className="mb-4 text-sm text-gray-600">
-                <p>
-                  <strong>Location:</strong> {selectedJob.location}
-                </p>
-                <p>
-                  <strong>Category:</strong> {selectedJob.category}
-                </p>
-              </div>
+                {/* Job Description */}
+                <div className="prose max-w-none space-y-4">
+                  {selectedJob.description
+                    ? selectedJob.description
+                        .split(/\n\s*\n/)
+                        .map((block, idx) => {
+                          const lines = block
+                            .split("\n")
+                            .map((l) => l.trim())
+                            .filter(Boolean);
 
-              <p className="text-sm mb-4">
-                Posted:{" "}
-                <span className="font-medium">
-                  {format(new Date(selectedJob.created_at), "EEE, do MMM yyyy")}
-                </span>
-              </p>
+                          const hasBullets = lines.some((l) => /^-\s+/.test(l));
+                          const boldify = (s: string) =>
+                            s.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
 
-              {selectedJob.url && (
-                <a
-                  href={selectedJob.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-500 underline text-sm block mb-4"
-                >
-                  View Job Posting
-                </a>
-              )}
+                          if (hasBullets) {
+                            const headingLines = lines.filter(
+                              (l) => !/^- /.test(l)
+                            );
+                            const bulletLines = lines
+                              .filter((l) => /^- /.test(l))
+                              .map((l) => l.replace(/^- /, ""));
 
-              {/* Job Description */}
-              <div className="prose max-w-none space-y-4">
-                {selectedJob.description
-                  ? selectedJob.description
-                      .split(/\n\s*\n/)
-                      .map((block, idx) => {
-                        const lines = block
-                          .split("\n")
-                          .map((l) => l.trim())
-                          .filter(Boolean);
-
-                        const hasBullets = lines.some((l) => /^-\s+/.test(l));
-                        const boldify = (s: string) =>
-                          s.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
-
-                        if (hasBullets) {
-                          const headingLines = lines.filter(
-                            (l) => !/^- /.test(l)
-                          );
-                          const bulletLines = lines
-                            .filter((l) => /^- /.test(l))
-                            .map((l) => l.replace(/^- /, ""));
-
-                          return (
-                            <div key={idx} className="space-y-2">
-                              {headingLines.length > 0 && (
-                                <div
-                                  className="text-sm leading-relaxed"
-                                  dangerouslySetInnerHTML={{
-                                    __html: boldify(headingLines.join("<br/>")),
-                                  }}
-                                />
-                              )}
-                              <ul className="list-disc space-y-1 text-sm ml-6">
-                                {bulletLines.map((li, i) => (
-                                  <li
-                                    key={i}
+                            return (
+                              <div key={idx} className="space-y-2">
+                                {headingLines.length > 0 && (
+                                  <div
+                                    className="text-sm leading-relaxed"
                                     dangerouslySetInnerHTML={{
-                                      __html: boldify(li),
+                                      __html: boldify(
+                                        headingLines.join("<br/>")
+                                      ),
                                     }}
                                   />
-                                ))}
-                              </ul>
-                            </div>
-                          );
-                        } else {
-                          const html = boldify(lines.join("\n"));
-                          return (
-                            <div
-                              key={idx}
-                              className="whitespace-pre-wrap leading-relaxed text-sm"
-                              dangerouslySetInnerHTML={{ __html: html }}
-                            />
-                          );
-                        }
-                      })
-                  : "No description available."}
+                                )}
+                                <ul className="list-disc space-y-1 text-sm ml-6">
+                                  {bulletLines.map((li, i) => (
+                                    <li
+                                      key={i}
+                                      dangerouslySetInnerHTML={{
+                                        __html: boldify(li),
+                                      }}
+                                    />
+                                  ))}
+                                </ul>
+                              </div>
+                            );
+                          } else {
+                            const html = boldify(lines.join("\n"));
+                            return (
+                              <div
+                                key={idx}
+                                className="whitespace-pre-wrap leading-relaxed text-sm"
+                                dangerouslySetInnerHTML={{ __html: html }}
+                              />
+                            );
+                          }
+                        })
+                    : "No description available."}
+                </div>
               </div>
             </>
           ) : (
