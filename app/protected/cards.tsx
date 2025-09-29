@@ -206,6 +206,7 @@ export default function Cards() {
       } = await supabase.auth.getUser();
 
       if (userError || !user) {
+        toast.error("Failed to fetch user info");
         return;
       }
 
@@ -475,7 +476,7 @@ export default function Cards() {
   };
 
   return (
-    <div className="flex flex-col h-full w-full">
+    <div className="flex flex-col h-full w-full p-20">
       {/* Top Bar: Search & Filters */}
       <div className="p-4 border-b bg-background">
         <div className="flex flex-col lg:flex-row gap-4">

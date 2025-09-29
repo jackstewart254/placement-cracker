@@ -1,43 +1,27 @@
-import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { LogoutButton } from "@/components/logout-button";
+import { redirect } from "next/navigation";
+import ProfilePage from "./content";
 
-// Components for user data
-import PersonalInformation from "./components/personal-information";
-import MetaInformation from "./components/user-information";
+const Home = async () => {
+  const supabase = await createClient(); // <- Use server client here
 
-export default async function ProfilePage() {
-  const supabase = await createClient();
+  // Fetch current user
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
 
-  // Check if the user is authenticated
-  const { data, error } = await supabase.auth.getClaims();
-  if (error || !data?.claims) {
+  console.log("Current user:", user, error);
+
+  if (error || !user) {
     redirect("/auth/login");
   }
 
   return (
-    <div className="flex flex-col gap-12 p-20 w-full">
-      {/* Personal Information Section */}
-      <div className="w-full flex flex-col">
-        <h2 className="font-bold text-2xl mb-4">Personal Information</h2>
-        <p className="mb-4 text-sm text-muted-foreground">
-          Keep your personal details up to date so they can be automatically
-          included in your applications.
-        </p>
-        <PersonalInformation />
-      </div>
-
-      {/* Relevant Information Section */}
-      <div className="w-full flex flex-col">
-        <h2 className="font-bold text-2xl mb-4">Relevant Information</h2>
-        <p className="mb-4 text-sm font-normal text-muted-foreground">
-          Enter comma-separated values for each category below, except{" "}
-          <strong>Personal Projects</strong>, where you should use paragraph
-          formatting.
-        </p>
-        <MetaInformation />
-      </div>
-      <LogoutButton />
+    <div>
+      <ProfilePage />
     </div>
   );
-}
+};
+
+export default Home;
