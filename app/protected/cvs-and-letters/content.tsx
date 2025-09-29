@@ -4,12 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import { useSearchParams } from "next/navigation"; // ✅ For reading query parameters
 import { createClient } from "@/lib/supabase/client";
 import { format } from "date-fns";
-import {
-  Loader2Icon,
-  ExternalLinkIcon,
-  FileTextIcon,
-  ClipboardListIcon,
-} from "lucide-react";
+import { Loader2Icon, FileTextIcon, ClipboardListIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -75,6 +70,7 @@ const formatDate = (value?: string | null) => {
 export default function CVsAndLettersPage() {
   const supabase = createClient();
   const searchParams = useSearchParams(); // ✅ to get ?job_id= from URL
+  console.log(searchParams);
   const jobIdFromQuery = searchParams.get("job_id");
 
   const [activeView, setActiveView] = useState<"cvs" | "letters">("letters");

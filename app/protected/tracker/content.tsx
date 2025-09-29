@@ -23,6 +23,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Loader2Icon, ChevronDownIcon } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 // List of status options
 const STATUS_OPTIONS = [
@@ -59,6 +60,7 @@ interface TrackingRow {
 
 export default function TrackerPage() {
   const supabase = createClient();
+  const router = useRouter();
 
   const [loading, setLoading] = useState(true);
   const [trackingData, setTrackingData] = useState<TrackingRow[]>([]);
