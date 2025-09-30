@@ -6,6 +6,7 @@ import { Button } from "./ui/button";
 import Link from "next/link";
 import { EnvVarWarning } from "./env-var-warning";
 import { hasEnvVars } from "@/lib/utils";
+import { ThemeSwitcher } from "./theme-switcher";
 
 interface AuthButtonClientProps {
   initialUser: any; // Supabase user object or null
@@ -33,7 +34,7 @@ export function AuthButtonClient({ initialUser }: AuthButtonClientProps) {
 
   return (
     <div className="flex gap-6 items-center">
-      {/* ✅ Always visible Home link */}
+      <ThemeSwitcher />
       <Link href="/protected" className={navLinkClass}>
         Home
       </Link>

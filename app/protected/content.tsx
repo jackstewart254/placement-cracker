@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { Badge, Loader2Icon, SearchIcon } from "lucide-react";
@@ -39,6 +40,7 @@ export interface UnifiedCoverLetter {
   job_type?: string;
   salary?: string;
   deadline?: Date;
+  logo?: string;
 }
 
 export interface interfaceCoverLetter {
@@ -118,21 +120,21 @@ export default function Cards() {
         setSavedJobs([]);
       }
 
-      // Fetch jobs (always visible)
       const today = new Date().toISOString();
       const { data: jobs, error: jobsError } = await supabase
-        .from("jobs")
+        .from("processing")
         .select("*")
         .or(`deadline.gte.${today},deadline.is.null`)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .eq("ready", true);
 
       if (jobsError) throw jobsError;
 
       // Fetch companies
       const { data: companies } = await supabase
         .from("companies")
-        .select("id, name")
-        .eq("new", false);
+        .select("id, name");
+      // .eq("new", true);
 
       const companyMap = (companies || []).reduce<Record<string, string>>(
         (acc, c) => {
@@ -144,6 +146,7 @@ export default function Cards() {
 
       // Merge jobs
       const unified: UnifiedCoverLetter[] = (jobs || []).map((job) => {
+        console.log(job);
         const jobCoverLetter = letters.find(
           (letter) => letter.job_id === job.id
         );
@@ -157,10 +160,11 @@ export default function Cards() {
           description: job.description || "",
           category: job.category || "",
           job_type: job.job_type || "",
-          url: job.url || "",
+          url: job.application_url || "",
           cover_letter: jobCoverLetter?.cover_letter || undefined,
           salary: job.salary,
           deadline: job.deadline,
+          logo: job.logo,
         };
       });
 
@@ -621,20 +625,28 @@ export default function Cards() {
                   }`}
                   onClick={() => handleSelectJob(job)}
                 >
-                  {/* White dot indicator for saved jobs */}
+                  <div className="w-full h-full flex flex-col"></div>
                   {savedJobs.includes(job.job_id) && (
                     <div className="absolute top-2 right-2 w-3 h-3 bg-white rounded-full shadow" />
                   )}
-                  {/* <div className="p-4 cursor-pointer rounded-lg bg-background transition-all duration-300 "> */}
 
-                  <div className="flex flex-col space-y-2 bg-background transition-all duration-300 cursor-pointer rounded-lg p-4">
+                  <div className="flex flex-row pt-4 px-4 bg-background rounded-t-lg gap-2 items-center">
+                    <Image
+                      src={job.logo}
+                      alt={job.company_name}
+                      width={46} // pick a sensible default
+                      height={46}
+                      className="object-contain rounded-md bg-white border"
+                    />
+
+                    <h3 className="text-base font-medium text-muted-foreground">
+                      {job.company_name}
+                    </h3>
+                  </div>
+
+                  <div className="flex flex-col space-y-2 bg-background transition-all duration-300 cursor-pointer rounded-b-lg p-4">
                     {/* Job Title */}
                     <h3 className="font-semibold text-base">{job.job_title}</h3>
-
-                    {/* Company */}
-                    <p className="text-sm text-muted-foreground">
-                      {job.company_name}
-                    </p>
 
                     {/* Location & Category */}
                     <p className="text-xs text-gray-500">
