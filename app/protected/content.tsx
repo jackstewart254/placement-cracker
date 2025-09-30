@@ -23,6 +23,7 @@ import {
   TooltipContent,
   TooltipProvider,
 } from "@/components/ui/tooltip";
+import ReactMarkdown from "react-markdown";
 
 export interface UnifiedCoverLetter {
   id: string;
@@ -130,7 +131,8 @@ export default function Cards() {
       // Fetch companies
       const { data: companies } = await supabase
         .from("companies")
-        .select("id, name");
+        .select("id, name")
+        .eq("new", false);
 
       const companyMap = (companies || []).reduce<Record<string, string>>(
         (acc, c) => {
@@ -794,7 +796,6 @@ export default function Cards() {
 
                 <Separator className="mb-4" />
 
-                {/* Job Description */}
                 <div className="prose max-w-none space-y-4">
                   {selectedJob.description
                     ? selectedJob.description
