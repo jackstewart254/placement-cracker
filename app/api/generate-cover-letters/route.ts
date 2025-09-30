@@ -268,7 +268,7 @@ Create a structured cover letter with **four paragraphs**, following this exact 
         {
           user_id,
           job_id: job.id,
-          status: "not_applied",
+          status: "Not Applied",
           auto_favourite: true,
           cover_letter_id: insertedCoverLetter.id, // Link generated cover letter
         },

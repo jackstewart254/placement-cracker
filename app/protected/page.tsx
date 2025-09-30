@@ -1,4 +1,4 @@
-import Cards from "./cards";
+import Cards from "./content";
 
 export default async function ProtectedPage() {
   return (
