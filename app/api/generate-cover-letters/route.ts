@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { createClient } from "../../../lib/supabase/server"
+import { createClient } from "../../../lib/supabase/server";
 import OpenAI from "openai";
+import { encode } from "gpt-tokenizer"; // ✅ Import tokenizer
 
 export async function POST(req: Request) {
-  const supabase = await createClient()
+  const supabase = await createClient();
 
   // 1. Verify user session
   const { data: authData, error: authError } = await supabase.auth.getUser();
@@ -19,7 +20,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "No jobs provided" }, { status: 400 });
   }
 
-  // 3. Check rate limit (max 15 requests per day)
+  // 3. Rate limit (15 per day)
   const now = new Date();
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
   const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString();
@@ -43,7 +44,7 @@ export async function POST(req: Request) {
     );
   }
 
-  // 4. Fetch individual information
+  // 4. Individual info
   const { data: individualInfo, error: individualError } = await supabase
     .from("individual_information")
     .select("*")
@@ -57,7 +58,7 @@ export async function POST(req: Request) {
     );
   }
 
-  // 5. Fetch extended user information
+  // 5. Extended user info
   const { data: userInfo, error: userInfoError } = await supabase
     .from("user_information")
     .select("*")
@@ -71,16 +72,14 @@ export async function POST(req: Request) {
     );
   }
 
-  // ✅ Parse and format JSON fields
+  // ✅ Format JSON fields
   const formatExtraCurriculars = (raw: string) => {
     try {
       const data = JSON.parse(raw || "[]");
       if (!Array.isArray(data) || data.length === 0) return "None provided";
-      return data
-        .map((item: { title: string; description: string }) =>
-          `• ${item.title} - ${item.description}`
-        )
-        .join("\n");
+      return data.map((item: { title: string; description: string }) =>
+        `• ${item.title} - ${item.description}`
+      ).join("\n");
     } catch {
       return "None provided";
     }
@@ -90,11 +89,9 @@ export async function POST(req: Request) {
     try {
       const data = JSON.parse(raw || "[]");
       if (!Array.isArray(data) || data.length === 0) return "None provided";
-      return data
-        .map((item: { title: string; description: string }) =>
-          `• ${item.title} - ${item.description}`
-        )
-        .join("\n");
+      return data.map((item: { title: string; description: string }) =>
+        `• ${item.title} - ${item.description}`
+      ).join("\n");
     } catch {
       return "None provided";
     }
@@ -103,14 +100,12 @@ export async function POST(req: Request) {
   const formattedExtraCurriculars = formatExtraCurriculars(userInfo.extra_curriculars);
   const formattedPersonalProjects = formatPersonalProjects(userInfo.personal_projects);
 
-  // 6. Initialize OpenAI
+  // 6. Init OpenAI
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
   const results = [];
 
-  // 7. Process each job
+  // 7. Process jobs
   for (const job of jobs) {
-    // Fetch full job details
     const { data: jobData, error: jobError } = await supabase
       .from("jobs")
       .select("*")
@@ -122,7 +117,6 @@ export async function POST(req: Request) {
       continue;
     }
 
-    // Fetch company details
     const { data: companyData, error: companyError } = await supabase
       .from("companies")
       .select("*")
@@ -189,13 +183,13 @@ Create a structured cover letter with **four paragraphs**, following this exact 
 - Word count must be between 335 and 380
 `;
 
-    const inputWordCount = aiPrompt.trim().split(/\s+/).length;
-    const tokenInput = Math.ceil(inputWordCount * 1.33); // Estimate tokens for input
+    // ✅ Accurate token count for input
+    const tokenInput = encode(aiPrompt).length;
 
     // 10. Start timing
     const startTime = Date.now();
 
-    // 11. Send prompt to OpenAI
+    // 11. Send prompt
     const response = await openai.responses.create({
       model: "gpt-5",
       input: aiPrompt,
@@ -203,17 +197,14 @@ Create a structured cover letter with **four paragraphs**, following this exact 
 
     // 12. End timing
     const endTime = Date.now();
-    const generationTimeSeconds = Math.round((endTime - startTime) / 1000); // convert ms → s
+    const generationTimeSeconds = Math.round((endTime - startTime) / 1000);
 
     const generatedLetter = response.output_text;
 
-    console.log(generatedLetter)
+    // ✅ Accurate token count for output
+    const tokenOutput = encode(generatedLetter).length;
 
-    // 13. Calculate token cost for output
-    const outputWordCount = generatedLetter.trim().split(/\s+/).length;
-    const tokenOutput = Math.ceil(outputWordCount * 1.33); // Estimate tokens for output
-
-    // 14. Insert request log into "requests" table
+    // 14. Insert into requests
     const { error: requestInsertError } = await supabase
       .from("requests")
       .insert([
@@ -223,7 +214,7 @@ Create a structured cover letter with **four paragraphs**, following this exact 
           input: aiPrompt,
           token_input: tokenInput,
           token_output: tokenOutput,
-          "time (s)": generationTimeSeconds, // ✅ track generation time in seconds
+          "time (s)": generationTimeSeconds,
         },
       ]);
 
@@ -232,7 +223,7 @@ Create a structured cover letter with **four paragraphs**, following this exact 
       continue;
     }
 
-    // 15. Insert generated cover letter into "cover_letters" table
+    // 15. Save cover letter
     const { data: insertedCoverLetter, error: insertError } = await supabase
       .from("cover_letters")
       .insert([
@@ -250,7 +241,7 @@ Create a structured cover letter with **four paragraphs**, following this exact 
       continue;
     }
 
-    // 16. Insert into tracking table — link to cover letter
+    // 16. Upsert into tracking
     const { error: trackingError } = await supabase
       .from("tracking")
       .upsert(
@@ -259,10 +250,10 @@ Create a structured cover letter with **four paragraphs**, following this exact 
           job_id: job.id,
           status: "Not Applied",
           auto_favourite: true,
-          cover_letter_id: insertedCoverLetter.id, // Link generated cover letter
+          cover_letter_id: insertedCoverLetter.id,
         },
         {
-          onConflict: "user_id,job_id", 
+          onConflict: "user_id,job_id",
         }
       );
 

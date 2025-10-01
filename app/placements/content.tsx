@@ -16,15 +16,13 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
-import { useRouter } from "next/navigation";
 import { Separator } from "@/components/ui/separator";
 import {
   Tooltip,
   TooltipTrigger,
   TooltipContent,
-  TooltipProvider,
 } from "@/components/ui/tooltip";
-import ReactMarkdown from "react-markdown";
+import { useRouter, useSearchParams } from "next/navigation";
 
 export interface UnifiedCoverLetter {
   id: string;
@@ -54,6 +52,7 @@ export interface interfaceCoverLetter {
 export default function Cards() {
   const supabase = createClient();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [allJobs, setAllJobs] = useState<UnifiedCoverLetter[]>([]);
   const [selectedJob, setSelectedJob] = useState<UnifiedCoverLetter | null>(
@@ -338,8 +337,21 @@ export default function Cards() {
 
   const totalPages = Math.ceil(filteredJobs.length / PAGE_SIZE);
 
+  const updateQuery = (key: string, value: string | number | null) => {
+    const params = new URLSearchParams(searchParams.toString());
+
+    if (value === null) {
+      params.delete(key);
+    } else {
+      params.set(key, String(value));
+    }
+
+    router.push(`?${params.toString()}`, { scroll: false });
+  };
+
   const handleSelectJob = (job: UnifiedCoverLetter) => {
     setSelectedJob(job);
+    updateQuery("job_id", job.id);
   };
 
   /**
@@ -489,6 +501,14 @@ export default function Cards() {
       toast.success(`${job.job_title} saved successfully!`);
       setSavedJobs((prev) => [...prev, job.job_id]);
     }
+  };
+
+  const updatePage = (newPage: number) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("page", String(newPage));
+
+    router.push(`?${params.toString()}`, { scroll: false });
+    setPage(newPage);
   };
 
   return (
@@ -717,7 +737,7 @@ export default function Cards() {
             <Button
               variant="outline"
               disabled={page === 1}
-              onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
+              onClick={() => updatePage(Math.max(page - 1, 1))}
             >
               Previous
             </Button>
@@ -727,7 +747,7 @@ export default function Cards() {
             <Button
               variant="outline"
               disabled={page >= totalPages}
-              onClick={() => setPage((prev) => prev + 1)}
+              onClick={() => updatePage(Math.min(page + 1, totalPages))}
             >
               Next
             </Button>
@@ -760,7 +780,7 @@ export default function Cards() {
                       <Button
                         onClick={() =>
                           router.push(
-                            `/protected/cvs-and-letters?job_id=${selectedJob.id}`
+                            `/account/cvs-and-letters?job_id=${selectedJob.id}`
                           )
                         }
                       >

@@ -35,22 +35,22 @@ export function AuthButtonClient({ initialUser }: AuthButtonClientProps) {
   return (
     <div className="flex gap-6 items-center">
       <ThemeSwitcher />
-      <Link href="/protected" className={navLinkClass}>
+      <Link href="/placements" className={navLinkClass}>
         Home
       </Link>
 
-      <Link href="/protected/chatbot" className={navLinkClass}>
+      <Link href="/account/chatbot" className={navLinkClass}>
         Q-Answerer
       </Link>
-      <Link href="/protected/tracker" className={navLinkClass}>
+      <Link href="/account/tracker" className={navLinkClass}>
         Tracker
       </Link>
 
-      <Link href="/protected/cvs-and-letters" className={navLinkClass}>
+      <Link href="/account/cvs-and-letters" className={navLinkClass}>
         CV's and Letters
       </Link>
 
-      <Link href="/protected/profile" className={navLinkClass}>
+      <Link href="/account/profile" className={navLinkClass}>
         Profile
       </Link>
       {/* --- Logged Out State --- */}

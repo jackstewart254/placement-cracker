@@ -10,7 +10,7 @@ const defaultUrl = process.env.VERCEL_URL
 export const metadata: Metadata = {
   metadataBase: new URL(defaultUrl),
   title: "Placement Cracker",
-  description: "Beat your competition to the application",
+  description: "Placement applications have never been easier",
 };
 
 const geistSans = Geist({

@@ -67,7 +67,8 @@ export default function ProfilePage() {
   // Regex
   const nameRegex = /^([A-Za-z]{2,})(\s[A-Za-z]{2,})+$/;
   const yearRegex = /^[1-9]\d*$/;
-  const degreeRegex = /^(BSc|BA|MSc|MA|PhD|MBA)\b/i;
+  const degreeRegex =
+    /^(BSc|BA|BEng|LLB|BEd|BFA|BMus|BNurs|BPhil|BVetMed|BVSc|MSc|MA|MEng|LLM|MBA|MEd|MFA|MMus|MPH|MRes|PhD|DPhil|EdD|EngD|MD|DDS|DMD)\b/i;
 
   /* ----------------------------------------------
      State for Meta Information

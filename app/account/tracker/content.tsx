@@ -5,7 +5,6 @@ import { createClient } from "@/lib/supabase/client";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
-
 import {
   Table,
   TableBody,
@@ -223,7 +222,7 @@ export default function TrackerPage() {
                         size="sm"
                         onClick={() =>
                           router.push(
-                            `/protected/cvs-and-letters?job_id=${row.job.id}`
+                            `/account/cvs-and-letters?job_id=${row.job.id}`
                           )
                         }
                       >
