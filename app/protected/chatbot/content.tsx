@@ -120,7 +120,7 @@ export default function Chatbot() {
       const { data: jobsData, error: jobsError } = await supabase
         .from("jobs")
         .select("id, job_title, company_id, location, category, displayable")
-        .eq("displayable", true)
+        .eq("ready", true)
         .order("created_at", { ascending: false });
 
       if (jobsError) {
@@ -152,11 +152,16 @@ export default function Chatbot() {
           ].filter(Boolean) as string[]
         );
 
-        setCategoryOptions(
-          [
-            ...new Set(jobsData.map((job) => job.category || "Uncategorized")),
-          ].sort()
-        );
+        // Flatten comma-separated categories into individual unique options
+        const categories = jobsData
+          .flatMap((job) =>
+            job.category
+              ? job.category.split(",").map((c) => c.trim())
+              : ["Uncategorized"]
+          )
+          .filter(Boolean);
+
+        setCategoryOptions([...new Set(categories)].sort());
 
         const locations = jobsData
           .flatMap((job) =>
@@ -184,7 +189,7 @@ export default function Chatbot() {
       .from("chat_sessions")
       .select(
         `id, job_id, created_at, updated_at,
-         jobs(
+         jobs( 
            job_title,
            companies(name)
          )`
@@ -192,7 +197,6 @@ export default function Chatbot() {
       .order("updated_at", { ascending: false });
 
     if (user?.id) {
-      // Only if you store user_id on chat_sessions (you do)
       query.eq("user_id", user.id);
     }
 
@@ -222,15 +226,13 @@ export default function Chatbot() {
       .eq("session_id", sessionId)
       .order("created_at", { ascending: true });
 
-    console.log(data);
-
     if (error) {
       console.error("Error fetching chat history:", error);
       toast.error("Failed to load chat history.");
       return;
     }
 
-    let items: any[] = data || [];
+    const items: any[] = data || [];
 
     // If nested relation didn't return answers, fetch outputs in a second query and merge.
     const needsOutputFetch =
@@ -238,16 +240,13 @@ export default function Chatbot() {
       items.length === 0 ||
       items.some((i) => !i.chat_outputs?.length);
 
-    let outputMap = new Map<string, string>();
+    const outputMap = new Map<string, string>();
     if (needsOutputFetch && items.length > 0) {
       const inputIds = items.map((i) => i.id);
-      console.log("input id", inputIds);
       const { data: outs, error: outsErr } = await supabase
         .from("chat_outputs")
         .select("id, answer")
         .in("id", inputIds);
-
-      console.log("outs", outs);
 
       if (!outsErr && outs) {
         outs.forEach((o) => outputMap.set(o.id, o.answer));
@@ -297,7 +296,9 @@ export default function Chatbot() {
      Select Session
   -------------------------- */
   const handleSelectSession = async (session: ChatSession) => {
+    console.log(session);
     setSelectedSession(session);
+    console.log(jobs);
     setSelectedJob(jobs.find((j) => j.id === session.job_id) || null);
     setStep("chat");
     fetchChatHistory(session.id);
@@ -426,25 +427,39 @@ export default function Chatbot() {
     );
   };
 
+  useEffect(() => {
+    console.log(step);
+  }, [step]);
+
+  useEffect(() => {
+    console.log(selectedJob);
+  }, [selectedJob]);
+
   /* -------------------------
      UI
   -------------------------- */
   return (
     <div className="flex h-[calc(100vh-64px)] p-20">
       {/* Left Sidebar - Chat Sessions */}
-      <div className="w-64 border-r h-full pr-4 space-y-4">
-        <div className="space-y-2 max-h-[80vh] overflow-y-auto">
+      <div className="w-72 border-r h-full pr-6 flex flex-col">
+        <h2 className="text-lg font-semibold mb-4">Chat Sessions</h2>
+
+        <div className="space-y-2 flex-1 overflow-y-auto">
           {sessions.length > 0 ? (
             sessions.map((session) => (
               <Card
                 key={session.id}
-                className={`p-3 cursor-pointer hover:bg-muted ${
-                  selectedSession?.id === session.id ? "bg-muted" : ""
+                className={`p-4 cursor-pointer rounded-lg transition-all duration-200 ${
+                  selectedSession?.id === session.id
+                    ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg"
+                    : "hover:bg-muted"
                 }`}
                 onClick={() => handleSelectSession(session)}
               >
-                <p className="font-medium">{session.jobs.job_title}</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="font-medium text-wrap">
+                  {session.jobs.job_title}
+                </p>
+                <p className="text-xs opacity-80 truncate">
                   {session.jobs.companies.name}
                 </p>
               </Card>
@@ -456,55 +471,85 @@ export default function Chatbot() {
       </div>
 
       {/* Main Chat Area */}
-      <div className="flex-1 pl-4 flex flex-col h-full">
+      <div className="flex-1 pl-6 flex flex-col h-full">
         {step === "select" && (
           <div className="flex items-center justify-center h-full">
-            <Button onClick={() => setIsModalOpen(true)}>
-              Start New Query
-            </Button>
+            <div className="max-w-xl text-center space-y-6">
+              <p className="text-lg font-medium leading-relaxed">
+                <span className="font-semibold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                  Now this is cool —
+                </span>{" "}
+                our <span className="font-semibold">Q-Answerer</span> starts a
+                chat with the placement you select. Then, simply paste in the
+                questions from the application and—voilà—using your profile info
+                and the job description, you’ll get perfectly tailored answers
+                just for you.
+              </p>
+
+              <Button
+                size="lg"
+                className="rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold shadow-lg hover:opacity-90"
+                onClick={() => setIsModalOpen(true)}
+              >
+                Start New Query
+              </Button>
+            </div>
           </div>
         )}
 
         {step === "chat" && selectedJob && (
           <>
             {/* Header */}
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">
-                {selectedJob?.job_title} -{" "}
-                {companies.find((c) => c.id === selectedJob?.company_id)
-                  ?.name || "Unknown Company"}
+            <div className="flex justify-between items-start mb-6">
+              <h2 className="text-2xl font-bold">
+                {selectedJob?.job_title} –{" "}
+                <span className="font-medium">
+                  {companies.find((c) => c.id === selectedJob?.company_id)
+                    ?.name || "Unknown Company"}
+                </span>
               </h2>
-              <Button variant="outline" onClick={() => setStep("select")}>
+              <Button
+                variant="outline"
+                className="rounded-lg"
+                onClick={() => {
+                  setSelectedSession(null); // reset any previous session
+
+                  setSelectedJob(null);
+                  setStep("select");
+                }}
+              >
                 Back to Sessions
               </Button>
             </div>
-            <Separator />
+            <Separator className="" />
 
             {/* Chat History */}
-            <div className="flex-1 flex flex-col overflow-hidden pt-4">
-              {/* Chat history (scrollable) */}
+            <div className="flex-1 flex flex-col overflow-hidden rounded-lg">
               <div
                 ref={chatContainerRef}
-                className="flex-1 overflow-y-auto pr-4 pb-4"
+                className="flex-1 overflow-y-auto py-4 space-y-4"
               >
                 {questions.map((q) => (
-                  <Card key={q.id} className="p-4 mb-4 last:mb-0">
+                  <Card
+                    key={q.id}
+                    className="p-4 rounded-lg shadow-sm border bg-background"
+                  >
                     <p className="font-semibold">Q: {q.question}</p>
                     {q.comment && (
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-muted-foreground mt-1">
                         Comment: {q.comment}
                       </p>
                     )}
                     {q.loading ? (
-                      <div className="flex items-center mt-2 text-muted-foreground">
+                      <div className="flex items-center mt-3 text-muted-foreground">
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                         Generating answer...
                       </div>
                     ) : (
-                      <div className="mt-2 space-y-2">
+                      <div className="mt-3 space-y-3">
                         <div className="space-y-2">
                           {q.answer.split(/\n+/).map((paragraph, index) => (
-                            <p key={index} className="text-sm">
+                            <p key={index} className="text-sm leading-relaxed">
                               {paragraph}
                             </p>
                           ))}
@@ -513,6 +558,7 @@ export default function Chatbot() {
                           <Button
                             size="sm"
                             variant="outline"
+                            className="rounded-lg"
                             onClick={() =>
                               navigator.clipboard.writeText(q.answer)
                             }
@@ -522,6 +568,7 @@ export default function Chatbot() {
                           <Button
                             size="sm"
                             variant="outline"
+                            className="rounded-lg"
                             onClick={() => handleOpenRegenerate(q.id)}
                           >
                             <RefreshCw className="h-4 w-4 mr-1" /> Regenerate
@@ -533,10 +580,10 @@ export default function Chatbot() {
                 ))}
               </div>
 
-              {/* Input Section (fixed at bottom) */}
-              <Card className="p-4 flex-shrink-0 flex">
-                <div className="flex gap-2 flex-col w-full">
-                  <div className="w-full flex flex-row gap-2">
+              {/* Input Section */}
+              <Card className="p-4 border-t flex-shrink-0 flex bg-background/60 backdrop-blur-md">
+                <div className="flex gap-3 flex-col w-full">
+                  <div className="flex gap-2">
                     <Input
                       placeholder="Enter your next question..."
                       value={newQuestion}
@@ -546,8 +593,10 @@ export default function Chatbot() {
                         !isGenerating &&
                         handleGenerateAnswer(newQuestion)
                       }
+                      className="flex-1 rounded-lg"
                     />
                     <Button
+                      className="rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md hover:opacity-90"
                       onClick={() => handleGenerateAnswer(newQuestion)}
                       disabled={isGenerating}
                     >
@@ -562,13 +611,9 @@ export default function Chatbot() {
                     </Button>
                   </div>
 
-                  <div className="flex items-center justify-between">
-                    {" "}
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
                     <div className="flex items-center gap-2">
-                      {" "}
-                      <label className="text-sm font-medium">
-                        Word Limit:
-                      </label>{" "}
+                      <label className="font-medium">Word Limit:</label>
                       <Input
                         type="number"
                         value={wordLimit}
@@ -576,17 +621,16 @@ export default function Chatbot() {
                         disabled={noLimit}
                         className="w-20"
                         min={1}
-                      />{" "}
-                    </div>{" "}
+                      />
+                    </div>
                     <div className="flex items-center gap-2">
-                      {" "}
                       <input
                         type="checkbox"
                         checked={noLimit}
                         onChange={() => setNoLimit(!noLimit)}
                         className="h-4 w-4"
-                      />{" "}
-                      <span className="text-sm">No Limit</span>{" "}
+                      />
+                      <span>No Limit</span>
                     </div>
                   </div>
                 </div>
@@ -598,13 +642,15 @@ export default function Chatbot() {
 
       {/* Modal for Job Selection */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="max-w-[60%] w-full">
+        <DialogContent className="max-w-[60%] w-full rounded-2xl shadow-xl">
           <DialogHeader>
-            <DialogTitle>Select a Job to Start</DialogTitle>
+            <DialogTitle className="text-xl font-semibold">
+              Select a Job to Start
+            </DialogTitle>
           </DialogHeader>
 
           {/* Filter Header */}
-          <div className="p-4 border-b bg-background">
+          <div className="p-4 border-b bg-background rounded-t-xl">
             <div className="flex flex-col lg:flex-row gap-4">
               {/* Search */}
               <div className="relative flex-1">
@@ -626,10 +672,10 @@ export default function Chatbot() {
                   value={selectedCompany}
                   onValueChange={setSelectedCompany}
                 >
-                  <SelectTrigger className="w-[180px]">
+                  <SelectTrigger className="w-[180px] rounded-lg">
                     <SelectValue placeholder="Filter by Company" />
                   </SelectTrigger>
-                  <SelectContent className="max-h-60 overflow-auto">
+                  <SelectContent className="max-h-60 overflow-auto rounded-lg">
                     <SelectItem value="all">All Companies</SelectItem>
                     {companyOptions.map((company) => (
                       <SelectItem key={company} value={company}>
@@ -644,14 +690,14 @@ export default function Chatbot() {
                   value={selectedCategories.join(",")}
                   onValueChange={() => {}}
                 >
-                  <SelectTrigger className="w-[220px]">
+                  <SelectTrigger className="w-[220px] rounded-lg">
                     <SelectValue placeholder="Filter by Category">
                       {selectedCategories.length > 0
                         ? `${selectedCategories.length} selected`
                         : "All Categories"}
                     </SelectValue>
                   </SelectTrigger>
-                  <SelectContent className="max-h-60 overflow-auto">
+                  <SelectContent className="max-h-60 overflow-auto rounded-lg">
                     {categoryOptions.map((cat) => (
                       <div
                         key={cat}
@@ -682,14 +728,14 @@ export default function Chatbot() {
                   value={selectedLocations.join(",")}
                   onValueChange={() => {}}
                 >
-                  <SelectTrigger className="w-[220px]">
+                  <SelectTrigger className="w-[220px] rounded-lg">
                     <SelectValue placeholder="Filter by Location">
                       {selectedLocations.length > 0
                         ? `${selectedLocations.length} selected`
                         : "All Locations"}
                     </SelectValue>
                   </SelectTrigger>
-                  <SelectContent className="max-h-60 overflow-auto">
+                  <SelectContent className="max-h-60 overflow-auto rounded-lg">
                     {locationOptions.map((loc) => (
                       <div
                         key={loc}
@@ -719,12 +765,10 @@ export default function Chatbot() {
           </div>
 
           {/* Filtered Job Results */}
-          <div className="max-h-80 overflow-y-auto space-y-2 p-4">
+          <div className="max-h-96 overflow-y-auto space-y-2 px-4">
             {jobs
               .filter((job) => {
                 const company = companies.find((c) => c.id === job.company_id);
-
-                // Search filter
                 const matchesSearch =
                   searchTerm.trim().length === 0 ||
                   job.job_title
@@ -733,26 +777,26 @@ export default function Chatbot() {
                   (company?.name.toLowerCase() || "").includes(
                     searchTerm.toLowerCase()
                   );
-
-                // Company filter
                 const matchesCompany =
                   selectedCompany !== "all"
                     ? company?.name === selectedCompany
                     : true;
+                const jobCategories = job.category
+                  ? job.category.split(",").map((c) => c.trim().toLowerCase())
+                  : ["uncategorized"];
 
-                // Category filter
                 const matchesCategory =
                   selectedCategories.length > 0
-                    ? selectedCategories.includes(job.category)
+                    ? selectedCategories.some((selected) =>
+                        jobCategories.includes(selected.toLowerCase())
+                      )
                     : true;
 
-                // Location filter
                 const jobLocations = job.location
                   ? job.location
                       .split(",")
                       .map((loc) => loc.trim().toLowerCase())
                   : [];
-
                 const matchesLocation =
                   selectedLocations.length > 0
                     ? selectedLocations.some((selected) =>
@@ -772,7 +816,7 @@ export default function Chatbot() {
                 return (
                   <Card
                     key={job.id}
-                    className="p-3 cursor-pointer hover:bg-muted"
+                    className="p-4 cursor-pointer hover:bg-muted rounded-lg transition-all"
                     onClick={() => {
                       handleCreateSession(job);
                       setIsModalOpen(false);
@@ -783,7 +827,7 @@ export default function Chatbot() {
                       {company?.name || "Unknown Company"}
                     </p>
                     {job.category && (
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-muted-foreground mt-1">
                         Category: {job.category}
                       </p>
                     )}
@@ -793,7 +837,11 @@ export default function Chatbot() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsModalOpen(false)}>
+            <Button
+              variant="outline"
+              className="rounded-lg"
+              onClick={() => setIsModalOpen(false)}
+            >
               Cancel
             </Button>
           </DialogFooter>
@@ -802,19 +850,20 @@ export default function Chatbot() {
 
       {/* Regenerate Dialog */}
       <Dialog open={isRegenerateOpen} onOpenChange={setIsRegenerateOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-lg w-full rounded-2xl shadow-xl">
           <DialogHeader>
-            <DialogTitle>Regenerate Answer</DialogTitle>
+            <DialogTitle className="text-lg font-semibold">
+              Regenerate Answer
+            </DialogTitle>
           </DialogHeader>
 
-          {/* Context Textarea */}
           <Textarea
             placeholder="What would you like to mention or change?"
             value={regenerateContext}
             onChange={(e) => setRegenerateContext(e.target.value)}
+            className="rounded-lg"
           />
 
-          {/* Word Limit Section */}
           <div className="flex items-center justify-between mt-4 gap-4">
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium">Word Limit</label>
@@ -823,7 +872,7 @@ export default function Chatbot() {
                 value={wordLimit}
                 onChange={(e) => setWordLimit(Number(e.target.value))}
                 disabled={noLimit}
-                className="w-32"
+                className="w-32 rounded-lg"
                 min={1}
               />
             </div>
@@ -842,11 +891,17 @@ export default function Chatbot() {
           <DialogFooter>
             <Button
               variant="outline"
+              className="rounded-lg"
               onClick={() => setIsRegenerateOpen(false)}
             >
               Cancel
             </Button>
-            <Button onClick={handleRegenerate}>Regenerate</Button>
+            <Button
+              className="rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md hover:opacity-90"
+              onClick={handleRegenerate}
+            >
+              Regenerate
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

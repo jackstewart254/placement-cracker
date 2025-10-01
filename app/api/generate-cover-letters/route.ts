@@ -1,22 +1,9 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
+import { createClient } from "../../../lib/supabase/server"
 import OpenAI from "openai";
 
 export async function POST(req: Request) {
-  const cookieStore = cookies();
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_OR_ANON_KEY!,
-    {
-      cookies: {
-        get: async (name: string) => (await cookieStore).get(name)?.value,
-        set: () => {}, // no-op
-        remove: () => {}, // no-op
-      },
-    }
-  );
+  const supabase = await createClient()
 
   // 1. Verify user session
   const { data: authData, error: authError } = await supabase.auth.getUser();
@@ -187,7 +174,7 @@ Create a structured cover letter with **four paragraphs**, following this exact 
    - Highlight your most relevant technical skills, experiences, and achievements that directly match the job description.  
    - Use specific examples to demonstrate how your background aligns with the requirements of the role.
 
-3. **Cultural & Team Fit Paragraph:**  
+3. **Cultural, Team and Company Fit Paragraph:**  
    - Explain why you believe you are a great fit for the company's team, culture, and working environment.  
    - Show that you understand the company's values and how your personality, soft skills, and approach to work will help you thrive there.
 
@@ -199,9 +186,9 @@ Create a structured cover letter with **four paragraphs**, following this exact 
 - Be concise and avoid overly generic language or clichés.
 - Ensure each paragraph flows naturally into the next.
 - Return only the final cover letter text — no extra commentary, notes, or explanations.
+- Word count must be between 335 and 380
 `;
 
-    // 9. Calculate token cost for input
     const inputWordCount = aiPrompt.trim().split(/\s+/).length;
     const tokenInput = Math.ceil(inputWordCount * 1.33); // Estimate tokens for input
 
@@ -219,6 +206,8 @@ Create a structured cover letter with **four paragraphs**, following this exact 
     const generationTimeSeconds = Math.round((endTime - startTime) / 1000); // convert ms → s
 
     const generatedLetter = response.output_text;
+
+    console.log(generatedLetter)
 
     // 13. Calculate token cost for output
     const outputWordCount = generatedLetter.trim().split(/\s+/).length;
@@ -273,7 +262,7 @@ Create a structured cover letter with **four paragraphs**, following this exact 
           cover_letter_id: insertedCoverLetter.id, // Link generated cover letter
         },
         {
-          onConflict: "user_id,job_id", // Avoid duplicates by updating if record already exists
+          onConflict: "user_id,job_id", 
         }
       );
 

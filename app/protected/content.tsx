@@ -4,9 +4,9 @@ import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { Badge, Loader2Icon, SearchIcon } from "lucide-react";
+import { Loader2Icon, SearchIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -122,7 +122,7 @@ export default function Cards() {
 
       const today = new Date().toISOString();
       const { data: jobs, error: jobsError } = await supabase
-        .from("processing")
+        .from("jobs")
         .select("*")
         .or(`deadline.gte.${today},deadline.is.null`)
         .order("created_at", { ascending: false })
@@ -146,7 +146,6 @@ export default function Cards() {
 
       // Merge jobs
       const unified: UnifiedCoverLetter[] = (jobs || []).map((job) => {
-        console.log(job);
         const jobCoverLetter = letters.find(
           (letter) => letter.job_id === job.id
         );
@@ -160,7 +159,7 @@ export default function Cards() {
           description: job.description || "",
           category: job.category || "",
           job_type: job.job_type || "",
-          url: job.application_url || "",
+          url: job.url || "",
           cover_letter: jobCoverLetter?.cover_letter || undefined,
           salary: job.salary,
           deadline: job.deadline,
@@ -174,9 +173,12 @@ export default function Cards() {
       setCompanyOptions(
         [...new Set(unified.map((j) => j.company_name))].sort()
       );
-      setCategoryOptions(
-        [...new Set(unified.map((j) => j.category || "Uncategorized"))].sort()
+      // Inside fetchJobs(), after setAllJobs(unified)
+      const allCategories = unified.flatMap((j) =>
+        j.category ? j.category.split(",").map((c) => c.trim()) : []
       );
+
+      setCategoryOptions([...new Set(allCategories)].sort());
 
       const allLocations = unified
         .flatMap((job) =>
@@ -297,9 +299,13 @@ export default function Cards() {
       const matchesCompany =
         selectedCompany !== "all" ? job.company_name === selectedCompany : true;
 
+      const jobCategories = job.category
+        ? job.category.split(",").map((c) => c.trim())
+        : [];
+
       const matchesCategory =
         selectedCategories.length > 0
-          ? selectedCategories.includes(job.category)
+          ? jobCategories.some((c) => selectedCategories.includes(c))
           : true;
 
       const jobLocations = job.location
@@ -347,7 +353,10 @@ export default function Cards() {
         <Tooltip>
           <TooltipTrigger asChild>
             <div className="cursor-not-allowed">
-              <Button className="pointer-events-none opacity-50">
+              <Button
+                className="pointer-events-none opacity-50"
+                variant="outline"
+              >
                 Generate Cover Letter
               </Button>
             </div>
@@ -365,6 +374,7 @@ export default function Cards() {
     const button = (
       <div className={isDisabled ? "cursor-not-allowed" : ""}>
         <Button
+          variant="outline"
           className={isDisabled ? "pointer-events-none opacity-50" : ""}
           onClick={() => !isDisabled && handleGenerateCoverLetter(job)}
         >
@@ -420,6 +430,7 @@ export default function Cards() {
       });
 
       const result = await res.json();
+      console.log(result);
       if (!result.success) {
         toast.error(`Error generating cover letter for ${job.job_title}`);
       } else {
@@ -639,7 +650,7 @@ export default function Cards() {
                       className="object-contain rounded-md bg-white border"
                     />
 
-                    <h3 className="text-base font-medium text-muted-foreground">
+                    <h3 className="text-sm font-medium text-gray-500">
                       {job.company_name}
                     </h3>
                   </div>
@@ -649,8 +660,38 @@ export default function Cards() {
                     <h3 className="font-semibold text-base">{job.job_title}</h3>
 
                     {/* Location & Category */}
-                    <p className="text-xs text-gray-500">
-                      {job.location} • {job.category || "Uncategorized"}
+                    <p className="text-sm text-gray-700">
+                      {(() => {
+                        if (!job?.location) return "Not specified";
+
+                        const parts = job.location
+                          .split(",")
+                          .map((p) => p.trim());
+
+                        // If it's exactly "United Kingdom"
+                        if (
+                          parts.length === 1 &&
+                          parts[0] === "United Kingdom"
+                        ) {
+                          return "United Kingdom";
+                        }
+
+                        // Otherwise, return only the city/town names (everything before regions and country)
+                        // Heuristic: locations usually alternate City, Region, Country
+                        // So take only the first half until "United Kingdom"
+                        const withoutCountry = parts.filter(
+                          (p) => p !== "United Kingdom"
+                        );
+                        const cityCandidates = withoutCountry.slice(
+                          0,
+                          Math.ceil(withoutCountry.length / 2)
+                        );
+
+                        return cityCandidates.join(", ");
+                      })()}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      {job.category || "Uncategorized"}
                     </p>
 
                     {/* Salary - More pronounced */}
@@ -659,7 +700,7 @@ export default function Cards() {
                     </p>
 
                     {/* Deadline */}
-                    <p className="text-xs text-gray-600">
+                    <p className="text-sm text-gray-600">
                       Deadline:{" "}
                       {job.deadline
                         ? format(new Date(job.deadline), "EEE, do MMM yyyy")
@@ -761,7 +802,36 @@ export default function Cards() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 items-start my-4">
                   <div>
                     <p className="text-xs text-muted-foreground">Location</p>
-                    <p className="font-medium">{selectedJob.location}</p>
+                    <p className="font-medium">
+                      {(() => {
+                        if (!selectedJob.location) return "Not specified";
+
+                        const parts = selectedJob.location
+                          .split(",")
+                          .map((p) => p.trim());
+
+                        // If it's exactly "United Kingdom"
+                        if (
+                          parts.length === 1 &&
+                          parts[0] === "United Kingdom"
+                        ) {
+                          return "United Kingdom";
+                        }
+
+                        // Otherwise, return only the city/town names (everything before regions and country)
+                        // Heuristic: locations usually alternate City, Region, Country
+                        // So take only the first half until "United Kingdom"
+                        const withoutCountry = parts.filter(
+                          (p) => p !== "United Kingdom"
+                        );
+                        const cityCandidates = withoutCountry.slice(
+                          0,
+                          Math.ceil(withoutCountry.length / 2)
+                        );
+
+                        return cityCandidates.join(", ");
+                      })()}
+                    </p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Category</p>
@@ -795,16 +865,18 @@ export default function Cards() {
 
                 <Separator className="mb-4" />
 
-                {selectedJob.url && (
-                  <a
-                    href={selectedJob.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm mb-4 inline-block bg-gradient-to-r from-blue-500 to-purple-600 bg-clip-text text-transparent underline decoration-transparent hover:decoration-blue-500 transition duration-300"
-                  >
-                    View Full Job Posting
-                  </a>
-                )}
+                <div className="w-full mb-4">
+                  {selectedJob.url && (
+                    <a
+                      href={selectedJob.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-2 rounded-md bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold shadow-lg hover:opacity-90 transition max-w-40"
+                    >
+                      Apply now
+                    </a>
+                  )}
+                </div>
 
                 <Separator className="mb-4" />
 
@@ -816,7 +888,9 @@ export default function Cards() {
                           const lines = block
                             .split("\n")
                             .map((l) => l.trim())
-                            .filter(Boolean);
+                            .filter(
+                              (l) => l && l !== "---" // 🚀 ignore empty and --- separator lines
+                            );
 
                           const hasBullets = lines.some((l) => /^-\s+/.test(l));
                           const boldify = (s: string) =>
