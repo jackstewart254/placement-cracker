@@ -24,6 +24,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { toast } from "sonner";
 
 /* ---------- Types ---------- */
 interface CoverLetter {
@@ -223,7 +224,7 @@ export default function CVsAndLettersPage() {
 
   /* ---------- UI ---------- */
   return (
-    <div className="flex flex-col w-full h-[calc(100vh-64px)] max-h-[calc(100vh-80px)] overflow-hidden p-20">
+    <div className="flex flex-col w-full h-[calc(100vh-64px)] max-h-[calc(100vh-80px)] overflow-hidden md:p-20 p-4">
       {/* Inner container */}
       <div className="w-full flex-1 max-h-full space-y-8 flex flex-col overflow-hidden">
         <div className="flex items-center justify-between flex-wrap gap-4">
@@ -312,7 +313,7 @@ export default function CVsAndLettersPage() {
         <Separator />
 
         {/* Main Content Area */}
-        <div className="flex-1 overflow-auto px-4">
+        <div className="flex-1 overflow-auto ">
           {loading && (
             <div className="flex justify-center items-center py-20">
               <Loader2Icon className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -375,12 +376,31 @@ export default function CVsAndLettersPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2">
                   {/* Cover Letter Side */}
                   <div className="p-6 border-r">
-                    <DialogHeader>
-                      <DialogTitle>Cover Letter</DialogTitle>
-                      <DialogDescription>
-                        for {selectedLetter.job_title} at{" "}
-                        {selectedLetter.company_name}
-                      </DialogDescription>
+                    <DialogHeader className="flex flex-row items-center justify-between">
+                      <div>
+                        <DialogTitle>Cover Letter</DialogTitle>
+                        <DialogDescription>
+                          for {selectedLetter.job_title} at{" "}
+                          {selectedLetter.company_name}
+                        </DialogDescription>
+                      </div>
+                      {/* Copy Button */}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          if (selectedLetter.cover_letter) {
+                            navigator.clipboard.writeText(
+                              selectedLetter.cover_letter
+                            );
+                            toast.success("Cover letter copied to clipboard!");
+                          } else {
+                            toast.error("No cover letter to copy");
+                          }
+                        }}
+                      >
+                        Copy
+                      </Button>
                     </DialogHeader>
                     <Separator className="my-4" />
                     <pre className="whitespace-pre-wrap text-sm leading-relaxed">

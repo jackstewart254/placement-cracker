@@ -23,6 +23,7 @@ import {
   TooltipContent,
 } from "@/components/ui/tooltip";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useMediaQuery } from "usehooks-ts"; // or your own hook
 
 export interface UnifiedCoverLetter {
   id: string;
@@ -67,6 +68,7 @@ export default function Cards() {
   const [savedJobs, setSavedJobs] = useState<string[]>([]);
   const [user, setUser] = useState<any>(null); // NEW: Track authenticated user
   const [checkingUser, setCheckingUser] = useState(true); // NEW: Track loading state
+  const isDesktop = useMediaQuery("(min-width: 768px)");
 
   const [missingFields, setMissingFields] = useState<string[]>([]);
   const [userChecked, setUserChecked] = useState(false);
@@ -187,7 +189,7 @@ export default function Cards() {
 
       setLocationOptions([...new Set(allLocations)].sort());
 
-      if (unified.length > 0 && !selectedJob) {
+      if (unified.length > 0 && !selectedJob && isDesktop) {
         setSelectedJob(unified[0]);
       }
     } catch (error: any) {
@@ -196,7 +198,7 @@ export default function Cards() {
     } finally {
       setLoading(false);
     }
-  }, [supabase, user, selectedJob]);
+  }, [supabase, user, selectedJob, isDesktop]);
 
   const promptSignUp = () => {
     toast.error("Please create an account to use this feature.");
@@ -628,8 +630,8 @@ export default function Cards() {
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="flex flex-1 overflow-hidden">
+      {/* ----------- DESKTOP LAYOUT ----------- */}
+      <div className="hidden md:flex flex-1 overflow-hidden">
         {/* LEFT: Job List */}
         <div className="w-full md:w-1/4 border-r flex flex-col">
           <div
@@ -757,218 +759,615 @@ export default function Cards() {
         {/* RIGHT: Job Details */}
         <div className="flex-1 overflow-y-auto p-6">
           {selectedJob ? (
-            <>
-              {/* Job Title and Actions */}
-              <div className="flex flex-col">
-                <div className="flex flex-col sm:flex-row sm:items-start justify-between mb-6 gap-4">
-                  {/* Job Title and Company */}
-                  <div className="flex-1 min-w-0">
-                    <h2 className="text-2xl font-bold break-words">
-                      {selectedJob.job_title}
-                    </h2>
+            <div className="flex-1 overflow-y-auto p-6">
+              {selectedJob ? (
+                <>
+                  {/* Job Title and Actions */}
+                  <div className="flex flex-col">
+                    <div className="flex flex-col sm:flex-row sm:items-start justify-between mb-6 gap-4">
+                      {/* Job Title and Company */}
+                      <div className="flex-1 min-w-0">
+                        <h2 className="text-2xl font-bold break-words">
+                          {selectedJob.job_title}
+                        </h2>
 
-                    <p className="text-sm text-muted-foreground break-words">
-                      {selectedJob.company_name}
-                    </p>
-                  </div>
+                        <p className="text-sm text-muted-foreground break-words">
+                          {selectedJob.company_name}
+                        </p>
+                      </div>
 
-                  {/* Action Buttons - Always top right */}
-                  <div className="flex-shrink-0 flex gap-2">
-                    {coverLetters.find(
-                      (cl) => cl.job_id === selectedJob.job_id
-                    ) ? (
-                      <Button
-                        onClick={() =>
-                          router.push(
-                            `/account/cvs-and-letters?job_id=${selectedJob.id}`
-                          )
-                        }
-                      >
-                        View Cover Letter
-                      </Button>
-                    ) : (
-                      renderGenerateCoverLetterButton(selectedJob)
-                    )}
+                      {/* Action Buttons - Always top right */}
+                      <div className="flex-shrink-0 flex gap-2">
+                        {coverLetters.find(
+                          (cl) => cl.job_id === selectedJob.job_id
+                        ) ? (
+                          <Button
+                            onClick={() =>
+                              router.push(
+                                `/account/cvs-and-letters?job_id=${selectedJob.id}`
+                              )
+                            }
+                          >
+                            View Cover Letter
+                          </Button>
+                        ) : (
+                          renderGenerateCoverLetterButton(selectedJob)
+                        )}
 
-                    {savedJobs.includes(selectedJob.job_id) ? (
-                      <Button
-                        variant="outline"
-                        onClick={() =>
-                          user
-                            ? handleToggleSaveJob(selectedJob)
-                            : promptSignUp()
-                        }
-                        className="px-4"
-                      >
-                        Unsave
-                      </Button>
-                    ) : (
-                      <Button
-                        onClick={() =>
-                          user
-                            ? handleToggleSaveJob(selectedJob)
-                            : promptSignUp()
-                        }
-                      >
-                        Save
-                      </Button>
-                    )}
-                  </div>
-                </div>
+                        {savedJobs.includes(selectedJob.job_id) ? (
+                          <Button
+                            variant="outline"
+                            onClick={() =>
+                              user
+                                ? handleToggleSaveJob(selectedJob)
+                                : promptSignUp()
+                            }
+                            className="px-4"
+                          >
+                            Unsave
+                          </Button>
+                        ) : (
+                          <Button
+                            onClick={() =>
+                              user
+                                ? handleToggleSaveJob(selectedJob)
+                                : promptSignUp()
+                            }
+                          >
+                            Save
+                          </Button>
+                        )}
+                      </div>
+                    </div>
 
-                <Separator />
+                    <Separator />
 
-                {/* Sleek Information Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 items-start my-4">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Location</p>
-                    <p className="font-medium">
-                      {(() => {
-                        if (!selectedJob.location) return "Not specified";
+                    {/* Sleek Information Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 items-start my-4">
+                      <div>
+                        <p className="text-xs text-muted-foreground">
+                          Location
+                        </p>
+                        <p className="font-medium">
+                          {(() => {
+                            if (!selectedJob.location) return "Not specified";
 
-                        const parts = selectedJob.location
-                          .split(",")
-                          .map((p) => p.trim());
+                            const parts = selectedJob.location
+                              .split(",")
+                              .map((p) => p.trim());
 
-                        // If it's exactly "United Kingdom"
-                        if (
-                          parts.length === 1 &&
-                          parts[0] === "United Kingdom"
-                        ) {
-                          return "United Kingdom";
-                        }
+                            // If it's exactly "United Kingdom"
+                            if (
+                              parts.length === 1 &&
+                              parts[0] === "United Kingdom"
+                            ) {
+                              return "United Kingdom";
+                            }
 
-                        // Otherwise, return only the city/town names (everything before regions and country)
-                        // Heuristic: locations usually alternate City, Region, Country
-                        // So take only the first half until "United Kingdom"
-                        const withoutCountry = parts.filter(
-                          (p) => p !== "United Kingdom"
-                        );
-                        const cityCandidates = withoutCountry.slice(
-                          0,
-                          Math.ceil(withoutCountry.length / 2)
-                        );
-
-                        return cityCandidates.join(", ");
-                      })()}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Category</p>
-                    <p className="font-medium">
-                      {selectedJob.category || "Uncategorized"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Salary</p>
-                    <p className="font-medium">{selectedJob.salary || "N/A"}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Deadline</p>
-                    <p
-                      className={`font-medium ${
-                        selectedJob.deadline &&
-                        new Date(selectedJob.deadline).getTime() - Date.now() <
-                          7 * 24 * 60 * 60 * 1000 &&
-                        "text-red-600"
-                      }`}
-                    >
-                      {selectedJob.deadline
-                        ? format(
-                            new Date(selectedJob.deadline),
-                            "EEE, do MMM yyyy"
-                          )
-                        : "No Deadline"}
-                    </p>
-                  </div>
-                </div>
-
-                <Separator className="mb-4" />
-
-                <div className="w-full mb-4">
-                  {selectedJob.url && (
-                    <a
-                      href={selectedJob.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-3 py-2 rounded-md bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold shadow-lg hover:opacity-90 transition max-w-40"
-                    >
-                      Apply now
-                    </a>
-                  )}
-                </div>
-
-                <Separator className="mb-4" />
-
-                <div className="prose max-w-none space-y-4">
-                  {selectedJob.description
-                    ? selectedJob.description
-                        .split(/\n\s*\n/)
-                        .map((block, idx) => {
-                          const lines = block
-                            .split("\n")
-                            .map((l) => l.trim())
-                            .filter(
-                              (l) => l && l !== "---" // 🚀 ignore empty and --- separator lines
+                            // Otherwise, return only the city/town names (everything before regions and country)
+                            // Heuristic: locations usually alternate City, Region, Country
+                            // So take only the first half until "United Kingdom"
+                            const withoutCountry = parts.filter(
+                              (p) => p !== "United Kingdom"
+                            );
+                            const cityCandidates = withoutCountry.slice(
+                              0,
+                              Math.ceil(withoutCountry.length / 2)
                             );
 
-                          const hasBullets = lines.some((l) => /^-\s+/.test(l));
-                          const boldify = (s: string) =>
-                            s.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+                            return cityCandidates.join(", ");
+                          })()}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">
+                          Category
+                        </p>
+                        <p className="font-medium">
+                          {selectedJob.category || "Uncategorized"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Salary</p>
+                        <p className="font-medium">
+                          {selectedJob.salary || "N/A"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">
+                          Deadline
+                        </p>
+                        <p
+                          className={`font-medium ${
+                            selectedJob.deadline &&
+                            new Date(selectedJob.deadline).getTime() -
+                              Date.now() <
+                              7 * 24 * 60 * 60 * 1000 &&
+                            "text-red-600"
+                          }`}
+                        >
+                          {selectedJob.deadline
+                            ? format(
+                                new Date(selectedJob.deadline),
+                                "EEE, do MMM yyyy"
+                              )
+                            : "No Deadline"}
+                        </p>
+                      </div>
+                    </div>
 
-                          if (hasBullets) {
-                            const headingLines = lines.filter(
-                              (l) => !/^- /.test(l)
-                            );
-                            const bulletLines = lines
-                              .filter((l) => /^- /.test(l))
-                              .map((l) => l.replace(/^- /, ""));
+                    <Separator className="mb-4" />
 
-                            return (
-                              <div key={idx} className="space-y-2">
-                                {headingLines.length > 0 && (
+                    <div className="w-full mb-4">
+                      {selectedJob.url && (
+                        <a
+                          href={selectedJob.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3 py-2 rounded-md bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold shadow-lg hover:opacity-90 transition max-w-40"
+                        >
+                          Apply now
+                        </a>
+                      )}
+                    </div>
+
+                    <Separator className="mb-4" />
+                    <div className="prose max-w-none space-y-4">
+                      {selectedJob.description
+                        ? selectedJob.description
+                            // 🚀 remove ```markdown and ``` fences
+                            .replace(/```[a-z]*\n?/gi, "")
+                            .replace(/```/g, "")
+                            .split(/\n\s*\n/)
+                            .map((block, idx) => {
+                              const lines = block
+                                .split("\n")
+                                .map((l) => l.trim())
+                                .filter((l) => l && l !== "---");
+
+                              const hasBullets = lines.some((l) =>
+                                /^-\s+/.test(l)
+                              );
+
+                              // 🔧 helper for inline formatting
+                              const formatMarkdownLine = (s: string) => {
+                                return (
+                                  s
+                                    // ## Heading → H3
+                                    .replace(
+                                      /^##\s+(.*)$/,
+                                      "<h3 class='font-semibold mt-3'>$1</h3>"
+                                    )
+                                    // # Heading → H2
+                                    .replace(
+                                      /^#\s+(.*)$/,
+                                      "<h2 class='font-bold mt-4'>$1</h2>"
+                                    )
+                                    // **Heading** alone on a line → H3
+                                    .replace(
+                                      /^\*\*(.*?)\*\*$/,
+                                      "<h3 class='font-semibold mt-3'>$1</h3>"
+                                    )
+                                    // inline **bold**
+                                    .replace(
+                                      /\*\*(.*?)\*\*/g,
+                                      "<strong>$1</strong>"
+                                    )
+                                );
+                              };
+
+                              if (hasBullets) {
+                                const headingLines = lines.filter(
+                                  (l) => !/^- /.test(l)
+                                );
+                                const bulletLines = lines
+                                  .filter((l) => /^- /.test(l))
+                                  .map((l) => l.replace(/^- /, ""));
+
+                                return (
+                                  <div key={idx} className="space-y-2">
+                                    {headingLines.length > 0 && (
+                                      <div
+                                        className="text-sm leading-relaxed"
+                                        dangerouslySetInnerHTML={{
+                                          __html: headingLines
+                                            .map(formatMarkdownLine)
+                                            .join("<br/>"),
+                                        }}
+                                      />
+                                    )}
+                                    <ul className="list-disc space-y-1 text-sm ml-6">
+                                      {bulletLines.map((li, i) => (
+                                        <li
+                                          key={i}
+                                          dangerouslySetInnerHTML={{
+                                            __html: formatMarkdownLine(li),
+                                          }}
+                                        />
+                                      ))}
+                                    </ul>
+                                  </div>
+                                );
+                              } else {
+                                const html = lines
+                                  .map(formatMarkdownLine)
+                                  .join("<br/>");
+                                return (
                                   <div
-                                    className="text-sm leading-relaxed"
-                                    dangerouslySetInnerHTML={{
-                                      __html: boldify(
-                                        headingLines.join("<br/>")
-                                      ),
-                                    }}
+                                    key={idx}
+                                    className="whitespace-pre-wrap leading-relaxed text-sm"
+                                    dangerouslySetInnerHTML={{ __html: html }}
                                   />
-                                )}
-                                <ul className="list-disc space-y-1 text-sm ml-6">
-                                  {bulletLines.map((li, i) => (
-                                    <li
-                                      key={i}
-                                      dangerouslySetInnerHTML={{
-                                        __html: boldify(li),
-                                      }}
-                                    />
-                                  ))}
-                                </ul>
-                              </div>
-                            );
-                          } else {
-                            const html = boldify(lines.join("\n"));
-                            return (
-                              <div
-                                key={idx}
-                                className="whitespace-pre-wrap leading-relaxed text-sm"
-                                dangerouslySetInnerHTML={{ __html: html }}
-                              />
-                            );
-                          }
-                        })
-                    : "No description available."}
+                                );
+                              }
+                            })
+                        : "No description available."}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="text-muted-foreground flex items-center justify-center h-full">
+                  Select a job from the list to view details
                 </div>
-              </div>
-            </>
+              )}
+            </div>
           ) : (
             <div className="text-muted-foreground flex items-center justify-center h-full">
               Select a job from the list to view details
             </div>
           )}
         </div>
+      </div>
+
+      {/* ----------- MOBILE LAYOUT ----------- */}
+      <div className="flex md:hidden flex-1 overflow-y-auto">
+        {!selectedJob ? (
+          // Show job list on mobile by default
+          <div className="w-full p-4 space-y-4">
+            {paginatedJobs.map((job) => (
+              <Card
+                key={job.job_id}
+                className={`relative p-[1px] rounded-lg transition-all duration-300 ${
+                  selectedJob?.job_id === job.job_id
+                    ? "bg-gradient-to-r from-blue-500 to-purple-600"
+                    : "hover:bg-muted"
+                }`}
+                onClick={() => handleSelectJob(job)}
+              >
+                <div className="w-full h-full flex flex-col"></div>
+                {savedJobs.includes(job.job_id) && (
+                  <div className="absolute top-2 right-2 w-3 h-3 bg-white rounded-full shadow" />
+                )}
+
+                <div className="flex flex-row pt-4 px-4 bg-background rounded-t-lg gap-2 items-center">
+                  <Image
+                    src={job.logo}
+                    alt={job.company_name}
+                    width={46} // pick a sensible default
+                    height={46}
+                    className="object-contain rounded-md bg-white border"
+                  />
+
+                  <h3 className="text-sm font-medium text-gray-500">
+                    {job.company_name}
+                  </h3>
+                </div>
+
+                <div className="flex flex-col space-y-2 bg-background transition-all duration-300 cursor-pointer rounded-b-lg p-4">
+                  {/* Job Title */}
+                  <h3 className="font-semibold text-base">{job.job_title}</h3>
+
+                  {/* Location & Category */}
+                  <p className="text-sm text-gray-700">
+                    {(() => {
+                      if (!job?.location) return "Not specified";
+
+                      const parts = job.location
+                        .split(",")
+                        .map((p) => p.trim());
+
+                      // If it's exactly "United Kingdom"
+                      if (parts.length === 1 && parts[0] === "United Kingdom") {
+                        return "United Kingdom";
+                      }
+
+                      // Otherwise, return only the city/town names (everything before regions and country)
+                      // Heuristic: locations usually alternate City, Region, Country
+                      // So take only the first half until "United Kingdom"
+                      const withoutCountry = parts.filter(
+                        (p) => p !== "United Kingdom"
+                      );
+                      const cityCandidates = withoutCountry.slice(
+                        0,
+                        Math.ceil(withoutCountry.length / 2)
+                      );
+
+                      return cityCandidates.join(", ");
+                    })()}
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    {job.category || "Uncategorized"}
+                  </p>
+
+                  {/* Salary - More pronounced */}
+                  <p className="text-sm font-bold text-primary">
+                    {job.salary ? `${job.salary}` : "Salary: N/A"}
+                  </p>
+
+                  {/* Deadline */}
+                  <p className="text-sm text-gray-600">
+                    Deadline:{" "}
+                    {job.deadline
+                      ? format(new Date(job.deadline), "EEE, do MMM yyyy")
+                      : "No Deadline"}
+                  </p>
+                </div>
+              </Card>
+            ))}
+
+            {/* Pagination */}
+            <div className="pt-4 border-t flex justify-between items-center">
+              <Button
+                variant="outline"
+                disabled={page === 1}
+                onClick={() => updatePage(Math.max(page - 1, 1))}
+              >
+                Previous
+              </Button>
+              <span className="text-sm">
+                Page {page} of {totalPages || 1}
+              </span>
+              <Button
+                variant="outline"
+                disabled={page >= totalPages}
+                onClick={() => updatePage(Math.min(page + 1, totalPages))}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        ) : (
+          // Show job details when a job is selected
+          <div className="w-full p-4 space-y-4">
+            <Button
+              variant="outline"
+              onClick={() => setSelectedJob(null)}
+              className="mb-4"
+            >
+              ← Back to Jobs
+            </Button>
+
+            {/* Job details code reused */}
+            <div className="flex-1 overflow-y-auto p-2">
+              {selectedJob ? (
+                <>
+                  {/* Job Title and Actions */}
+                  <div className="flex flex-col">
+                    <div className="flex flex-col sm:flex-row sm:items-start justify-between mb-6 gap-4">
+                      {/* Job Title and Company */}
+                      <div className="flex-1 min-w-0">
+                        <h2 className="text-2xl font-bold break-words">
+                          {selectedJob.job_title}
+                        </h2>
+
+                        <p className="text-sm text-muted-foreground break-words">
+                          {selectedJob.company_name}
+                        </p>
+                      </div>
+
+                      {/* Action Buttons - Always top right */}
+                      <div className="flex-shrink-0 flex gap-2">
+                        {coverLetters.find(
+                          (cl) => cl.job_id === selectedJob.job_id
+                        ) ? (
+                          <Button
+                            onClick={() =>
+                              router.push(
+                                `/account/cvs-and-letters?job_id=${selectedJob.id}`
+                              )
+                            }
+                          >
+                            View Cover Letter
+                          </Button>
+                        ) : (
+                          renderGenerateCoverLetterButton(selectedJob)
+                        )}
+
+                        {savedJobs.includes(selectedJob.job_id) ? (
+                          <Button
+                            variant="outline"
+                            onClick={() =>
+                              user
+                                ? handleToggleSaveJob(selectedJob)
+                                : promptSignUp()
+                            }
+                            className="px-4"
+                          >
+                            Unsave
+                          </Button>
+                        ) : (
+                          <Button
+                            onClick={() =>
+                              user
+                                ? handleToggleSaveJob(selectedJob)
+                                : promptSignUp()
+                            }
+                          >
+                            Save
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    <Separator />
+
+                    {/* Sleek Information Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 items-start my-4">
+                      <div>
+                        <p className="text-xs text-muted-foreground">
+                          Location
+                        </p>
+                        <p className="font-medium">
+                          {(() => {
+                            if (!selectedJob.location) return "Not specified";
+
+                            const parts = selectedJob.location
+                              .split(",")
+                              .map((p) => p.trim());
+
+                            // If it's exactly "United Kingdom"
+                            if (
+                              parts.length === 1 &&
+                              parts[0] === "United Kingdom"
+                            ) {
+                              return "United Kingdom";
+                            }
+
+                            // Otherwise, return only the city/town names (everything before regions and country)
+                            // Heuristic: locations usually alternate City, Region, Country
+                            // So take only the first half until "United Kingdom"
+                            const withoutCountry = parts.filter(
+                              (p) => p !== "United Kingdom"
+                            );
+                            const cityCandidates = withoutCountry.slice(
+                              0,
+                              Math.ceil(withoutCountry.length / 2)
+                            );
+
+                            return cityCandidates.join(", ");
+                          })()}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">
+                          Category
+                        </p>
+                        <p className="font-medium">
+                          {selectedJob.category || "Uncategorized"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Salary</p>
+                        <p className="font-medium">
+                          {selectedJob.salary || "N/A"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">
+                          Deadline
+                        </p>
+                        <p
+                          className={`font-medium ${
+                            selectedJob.deadline &&
+                            new Date(selectedJob.deadline).getTime() -
+                              Date.now() <
+                              7 * 24 * 60 * 60 * 1000 &&
+                            "text-red-600"
+                          }`}
+                        >
+                          {selectedJob.deadline
+                            ? format(
+                                new Date(selectedJob.deadline),
+                                "EEE, do MMM yyyy"
+                              )
+                            : "No Deadline"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <Separator className="mb-4" />
+
+                    <div className="w-full mb-4">
+                      {selectedJob.url && (
+                        <a
+                          href={selectedJob.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3 py-2 rounded-md bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold shadow-lg hover:opacity-90 transition max-w-40"
+                        >
+                          Apply now
+                        </a>
+                      )}
+                    </div>
+
+                    <Separator className="mb-4" />
+
+                    <div className="prose max-w-none space-y-4">
+                      {selectedJob.description
+                        ? selectedJob.description
+                            .split(/\n\s*\n/)
+                            .map((block, idx) => {
+                              const lines = block
+                                .split("\n")
+                                .map((l) => l.trim())
+                                .filter(
+                                  (l) => l && l !== "---" // 🚀 ignore empty and --- separator lines
+                                );
+
+                              const hasBullets = lines.some((l) =>
+                                /^-\s+/.test(l)
+                              );
+                              const boldify = (s: string) =>
+                                s.replace(
+                                  /\*\*(.*?)\*\*/g,
+                                  "<strong>$1</strong>"
+                                );
+
+                              if (hasBullets) {
+                                const headingLines = lines.filter(
+                                  (l) => !/^- /.test(l)
+                                );
+                                const bulletLines = lines
+                                  .filter((l) => /^- /.test(l))
+                                  .map((l) => l.replace(/^- /, ""));
+
+                                return (
+                                  <div key={idx} className="space-y-2">
+                                    {headingLines.length > 0 && (
+                                      <div
+                                        className="text-sm leading-relaxed"
+                                        dangerouslySetInnerHTML={{
+                                          __html: boldify(
+                                            headingLines.join("<br/>")
+                                          ),
+                                        }}
+                                      />
+                                    )}
+                                    <ul className="list-disc space-y-1 text-sm ml-6">
+                                      {bulletLines.map((li, i) => (
+                                        <li
+                                          key={i}
+                                          dangerouslySetInnerHTML={{
+                                            __html: boldify(li),
+                                          }}
+                                        />
+                                      ))}
+                                    </ul>
+                                  </div>
+                                );
+                              } else {
+                                const html = boldify(lines.join("\n"));
+                                return (
+                                  <div
+                                    key={idx}
+                                    className="whitespace-pre-wrap leading-relaxed text-sm"
+                                    dangerouslySetInnerHTML={{ __html: html }}
+                                  />
+                                );
+                              }
+                            })
+                        : "No description available."}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="text-muted-foreground flex items-center justify-center h-full">
+                  Select a job from the list to view details
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

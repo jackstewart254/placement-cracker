@@ -1,15 +1,23 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "./ui/button";
 import Link from "next/link";
 import { EnvVarWarning } from "./env-var-warning";
 import { hasEnvVars } from "@/lib/utils";
 import { ThemeSwitcher } from "./theme-switcher";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface AuthButtonClientProps {
-  initialUser: any; // Supabase user object or null
+  initialUser: any;
 }
 
 const navLinkClass =
@@ -17,7 +25,20 @@ const navLinkClass =
 
 export function AuthButtonClient({ initialUser }: AuthButtonClientProps) {
   const supabase = createClient();
+  const router = useRouter();
+  const pathname = usePathname();
+
   const [user, setUser] = useState(initialUser);
+  const [menuValue, setMenuValue] = useState("");
+
+  // map routes → select values
+  useEffect(() => {
+    if (pathname.startsWith("/placements")) setMenuValue("home");
+    else if (pathname.startsWith("/account/cvs-and-letters"))
+      setMenuValue("cvs");
+    else if (pathname.startsWith("/account/profile")) setMenuValue("profile");
+    else setMenuValue(""); // default
+  }, [pathname]);
 
   // Listen for login/logout changes
   useEffect(() => {
@@ -27,32 +48,53 @@ export function AuthButtonClient({ initialUser }: AuthButtonClientProps) {
       setUser(session?.user ?? null);
     });
 
-    return () => {
-      subscription.unsubscribe();
-    };
+    return () => subscription.unsubscribe();
   }, [supabase]);
 
+  const handleMenuChange = (value: string) => {
+    setMenuValue(value);
+    if (value === "home") router.push("/placements");
+    if (value === "cvs") router.push("/account/cvs-and-letters");
+    if (value === "profile") router.push("/account/profile");
+  };
+
   return (
-    <div className="flex gap-6 items-center">
+    <div className="flex gap-4 items-center">
       <ThemeSwitcher />
-      <Link href="/placements" className={navLinkClass}>
-        Home
-      </Link>
 
-      <Link href="/account/chatbot" className={navLinkClass}>
-        Q-Answerer
-      </Link>
-      <Link href="/account/tracker" className={navLinkClass}>
-        Tracker
-      </Link>
+      {/* Desktop Nav */}
+      <div className="hidden md:flex gap-6 items-center">
+        <Link href="/placements" className={navLinkClass}>
+          Home
+        </Link>
+        <Link href="/account/chatbot" className={navLinkClass}>
+          ResolveAI
+        </Link>
+        <Link href="/account/tracker" className={navLinkClass}>
+          Tracker
+        </Link>
+        <Link href="/account/cvs-and-letters" className={navLinkClass}>
+          CV's and Letters
+        </Link>
+        <Link href="/account/profile" className={navLinkClass}>
+          Profile
+        </Link>
+      </div>
 
-      <Link href="/account/cvs-and-letters" className={navLinkClass}>
-        CV's and Letters
-      </Link>
+      {/* Mobile Nav */}
+      <div className="md:hidden">
+        <Select value={menuValue} onValueChange={handleMenuChange}>
+          <SelectTrigger className="w-[160px]">
+            <SelectValue placeholder="Menu" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="home">Home</SelectItem>
+            <SelectItem value="cvs">CV's and Letters</SelectItem>
+            <SelectItem value="profile">Profile</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
-      <Link href="/account/profile" className={navLinkClass}>
-        Profile
-      </Link>
       {/* --- Logged Out State --- */}
       {!user ? (
         <div className="flex gap-2">
@@ -61,18 +103,7 @@ export function AuthButtonClient({ initialUser }: AuthButtonClientProps) {
           </Button>
         </div>
       ) : (
-        <>
-          {!hasEnvVars && <EnvVarWarning />}
-
-          {/* Optional Logout Button */}
-          {/* <Button
-            variant="outline"
-            size="sm"
-            onClick={async () => await supabase.auth.signOut()}
-          >
-            Logout
-          </Button> */}
-        </>
+        <>{!hasEnvVars && <EnvVarWarning />}</>
       )}
     </div>
   );

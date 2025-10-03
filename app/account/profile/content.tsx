@@ -386,7 +386,7 @@ export default function ProfilePage() {
      UI
   ---------------------------------------------- */
   return (
-    <div className="flex flex-col gap-6 p-20 w-full">
+    <div className="flex flex-col gap-6 md:p-20 p-4 w-full">
       <h1 className="font-bold text-3xl mb-6">Profile</h1>
       <p className="text-sm text-muted-foreground mb-8">
         Manage your personal and relevant information here to include it in your

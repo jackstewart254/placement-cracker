@@ -33,7 +33,8 @@
     "react-markdown": "^10.1.0",
     "sonner": "^2.0.7",
     "stripe": "^19.0.0",
-    "tailwind-merge": "^3.3.0"
+    "tailwind-merge": "^3.3.0",
+    "usehooks-ts": "^3.1.1"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

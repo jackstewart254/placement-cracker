@@ -479,7 +479,7 @@ export default function Chatbot() {
                 <span className="font-semibold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                   Now this is cool —
                 </span>{" "}
-                our <span className="font-semibold">Q-Answerer</span> starts a
+                our <span className="font-semibold">ResolveAI</span> starts a
                 chat with the placement you select. Then, simply paste in the
                 questions from the application and—voilà—using your profile info
                 and the job description, you’ll get perfectly tailored answers
