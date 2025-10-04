@@ -24,7 +24,6 @@ export function ReferralTracker() {
       // 2️⃣ Record visit in referral_visits
       await supabase.from("referral_visits").insert([
         {
-          referral_id: referral,
           referred_id: referrer.user_id,
         },
       ]);
