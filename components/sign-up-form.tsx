@@ -161,7 +161,6 @@ export function SignUpForm({
         ]);
       if (creditsError) throw creditsError;
 
-      // ✅ If referralInput exists, log it in referrals table
       if (referralInput.trim()) {
         // Find the referrer_id
         const { data: referrerData } = await supabase

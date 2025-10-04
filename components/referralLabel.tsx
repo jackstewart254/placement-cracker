@@ -90,7 +90,7 @@ export function ReferralLabel() {
 
     const shareMessage = `I’ve been using Placement Cracker to instantly generate tailored cover letters and get AI-powered insights for placement applications. It’s genuinely helped me stand out — highly recommend giving it a try.
 
-👉 https://placementcracker.com/?ref=${referral}
+https://placementcracker.com/?ref=${referral}
 
 Use my referral code: ${referral} to unlock free access.`;
 
