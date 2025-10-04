@@ -651,83 +651,82 @@ export default function Cards() {
               paginatedJobs.map((job) => (
                 <Card
                   key={job.job_id}
-                  className={`relative p-[1px] rounded-lg transition-all duration-300 ${
+                  className={`relative cursor-pointer rounded-lg p-[1px] transition-all duration-300 flex flex-col ${
                     selectedJob?.job_id === job.job_id
-                      ? "bg-gradient-to-r from-blue-500 to-purple-600"
+                      ? "bg-gradient-to-r from-blue-500 to-purple-600 shadow-lg scale-[1.01]"
                       : "hover:bg-muted"
                   }`}
                   onClick={() => handleSelectJob(job)}
                 >
-                  <div className="w-full h-full flex flex-col"></div>
-                  {savedJobs.includes(job.job_id) && (
-                    <div className="absolute top-2 right-2 w-3 h-3 bg-white rounded-full shadow" />
-                  )}
+                  <div className="bg-background flex flex-col rounded-md p-4">
+                    <div className="w-full h-full flex flex-row items-center gap-2 rounded-t-md mb-4">
+                      <Image
+                        src={job.logo}
+                        alt={job.company_name}
+                        width={46} // pick a sensible default
+                        height={46}
+                        className="object-contain rounded-md border"
+                      />
 
-                  <div className="flex flex-row pt-4 px-4 bg-background rounded-t-lg gap-2 items-center">
-                    <Image
-                      src={job.logo}
-                      alt={job.company_name}
-                      width={46} // pick a sensible default
-                      height={46}
-                      className="object-contain rounded-md bg-white border"
-                    />
+                      <h3 className="text-sm font-medium text-gray-500">
+                        {job.company_name}
+                      </h3>
+                    </div>
 
-                    <h3 className="text-sm font-medium text-gray-500">
-                      {job.company_name}
-                    </h3>
-                  </div>
+                    <div className="flex flex-col space-y-2 rounded-b-md">
+                      {/* Job Title */}
+                      <h3 className="font-semibold text-base">
+                        {job.job_title}
+                      </h3>
 
-                  <div className="flex flex-col space-y-2 bg-background transition-all duration-300 cursor-pointer rounded-b-lg p-4">
-                    {/* Job Title */}
-                    <h3 className="font-semibold text-base">{job.job_title}</h3>
+                      {/* Location & Category */}
+                      <p className="text-sm text-gray-700">
+                        {(() => {
+                          if (!job?.location) return "Not specified";
 
-                    {/* Location & Category */}
-                    <p className="text-sm text-gray-700">
-                      {(() => {
-                        if (!job?.location) return "Not specified";
+                          const parts = job.location
+                            .split(",")
+                            .map((p) => p.trim());
 
-                        const parts = job.location
-                          .split(",")
-                          .map((p) => p.trim());
+                          // If it's exactly "United Kingdom"
+                          if (
+                            parts.length === 1 &&
+                            parts[0] === "United Kingdom"
+                          ) {
+                            return "United Kingdom";
+                          }
 
-                        // If it's exactly "United Kingdom"
-                        if (
-                          parts.length === 1 &&
-                          parts[0] === "United Kingdom"
-                        ) {
-                          return "United Kingdom";
-                        }
+                          // Otherwise, return only the city/town names (everything before regions and country)
+                          // Heuristic: locations usually alternate City, Region, Country
+                          // So take only the first half until "United Kingdom"
+                          const withoutCountry = parts.filter(
+                            (p) => p !== "United Kingdom"
+                          );
+                          const cityCandidates = withoutCountry.slice(
+                            0,
+                            Math.ceil(withoutCountry.length / 2)
+                          );
 
-                        // Otherwise, return only the city/town names (everything before regions and country)
-                        // Heuristic: locations usually alternate City, Region, Country
-                        // So take only the first half until "United Kingdom"
-                        const withoutCountry = parts.filter(
-                          (p) => p !== "United Kingdom"
-                        );
-                        const cityCandidates = withoutCountry.slice(
-                          0,
-                          Math.ceil(withoutCountry.length / 2)
-                        );
+                          return cityCandidates.join(", ");
+                        })()}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        {job.category || "Uncategorized"}
+                      </p>
 
-                        return cityCandidates.join(", ");
-                      })()}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      {job.category || "Uncategorized"}
-                    </p>
+                      {/* Salary - More pronounced */}
+                      <p className="text-sm font-bold text-primary">
+                        {job.salary ? `${job.salary}` : "Salary: N/A"}
+                      </p>
 
-                    {/* Salary - More pronounced */}
-                    <p className="text-sm font-bold text-primary">
-                      {job.salary ? `${job.salary}` : "Salary: N/A"}
-                    </p>
-
-                    {/* Deadline */}
-                    <p className="text-sm text-gray-600">
-                      Deadline:{" "}
-                      {job.deadline
-                        ? format(new Date(job.deadline), "EEE, do MMM yyyy")
-                        : "No Deadline"}
-                    </p>
+                      {/* Deadline */}
+                      <p className="text-sm text-gray-600">
+                        Deadline:{" "}
+                        {job.deadline
+                          ? format(new Date(job.deadline), "EEE, do MMM yyyy")
+                          : "No Deadline"}
+                      </p>
+                    </div>
                   </div>
                 </Card>
               ))
@@ -1291,27 +1290,49 @@ export default function Cards() {
                     </div>
 
                     <Separator className="mb-4" />
-
                     <div className="prose max-w-none space-y-4">
                       {selectedJob.description
                         ? selectedJob.description
+                            // 🚀 remove ```markdown and ``` fences
+                            .replace(/```[a-z]*\n?/gi, "")
+                            .replace(/```/g, "")
                             .split(/\n\s*\n/)
                             .map((block, idx) => {
                               const lines = block
                                 .split("\n")
                                 .map((l) => l.trim())
-                                .filter(
-                                  (l) => l && l !== "---" // 🚀 ignore empty and --- separator lines
-                                );
+                                .filter((l) => l && l !== "---");
 
                               const hasBullets = lines.some((l) =>
                                 /^-\s+/.test(l)
                               );
-                              const boldify = (s: string) =>
-                                s.replace(
-                                  /\*\*(.*?)\*\*/g,
-                                  "<strong>$1</strong>"
+
+                              // 🔧 helper for inline formatting
+                              const formatMarkdownLine = (s: string) => {
+                                return (
+                                  s
+                                    // ## Heading → H3
+                                    .replace(
+                                      /^##\s+(.*)$/,
+                                      "<h3 class='font-semibold mt-3'>$1</h3>"
+                                    )
+                                    // # Heading → H2
+                                    .replace(
+                                      /^#\s+(.*)$/,
+                                      "<h2 class='font-bold mt-4'>$1</h2>"
+                                    )
+                                    // **Heading** alone on a line → H3
+                                    .replace(
+                                      /^\*\*(.*?)\*\*$/,
+                                      "<h3 class='font-semibold mt-3'>$1</h3>"
+                                    )
+                                    // inline **bold**
+                                    .replace(
+                                      /\*\*(.*?)\*\*/g,
+                                      "<strong>$1</strong>"
+                                    )
                                 );
+                              };
 
                               if (hasBullets) {
                                 const headingLines = lines.filter(
@@ -1327,9 +1348,9 @@ export default function Cards() {
                                       <div
                                         className="text-sm leading-relaxed"
                                         dangerouslySetInnerHTML={{
-                                          __html: boldify(
-                                            headingLines.join("<br/>")
-                                          ),
+                                          __html: headingLines
+                                            .map(formatMarkdownLine)
+                                            .join("<br/>"),
                                         }}
                                       />
                                     )}
@@ -1338,7 +1359,7 @@ export default function Cards() {
                                         <li
                                           key={i}
                                           dangerouslySetInnerHTML={{
-                                            __html: boldify(li),
+                                            __html: formatMarkdownLine(li),
                                           }}
                                         />
                                       ))}
@@ -1346,7 +1367,9 @@ export default function Cards() {
                                   </div>
                                 );
                               } else {
-                                const html = boldify(lines.join("\n"));
+                                const html = lines
+                                  .map(formatMarkdownLine)
+                                  .join("<br/>");
                                 return (
                                   <div
                                     key={idx}

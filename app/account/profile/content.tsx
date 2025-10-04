@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { toast } from "sonner"; // ✅ Add this near your other imports
 
 import {
   Accordion,
@@ -89,6 +90,94 @@ export default function ProfilePage() {
     technical_skills: "",
     soft_skills: "",
   });
+
+  /* ----------------------------------------------
+   Referral Input State
+---------------------------------------------- */
+  const [referralInput, setReferralInput] = useState("");
+  const [referralStatus, setReferralStatus] = useState<
+    "idle" | "loading" | "success" | "error"
+  >("idle");
+
+  /* ----------------------------------------------
+   Referral Submission Logic
+---------------------------------------------- */
+  const handleReferralSubmit = async () => {
+    if (!referralInput.trim()) {
+      toast.error("Please enter a referral code.");
+      return;
+    }
+
+    setReferralStatus("loading");
+    const supabase = createClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      toast.error("You must be logged in to use a referral code.");
+      setReferralStatus("idle");
+      return;
+    }
+
+    // 1️⃣ Check if user already used a referral
+    const { data: existingReferral } = await supabase
+      .from("referrals")
+      .select("id")
+      .eq("referred_id", user.id)
+      .maybeSingle();
+
+    if (existingReferral) {
+      toast.error("You’ve already used a referral code — only one per user!");
+      setReferralStatus("idle");
+      return;
+    }
+
+    // 2️⃣ Find the referrer’s ID
+    const { data: referrer } = await supabase
+      .from("individual_information")
+      .select("user_id")
+      .eq("referral", referralInput.trim())
+      .maybeSingle();
+
+    if (!referrer) {
+      toast.error("Invalid referral code. Please check and try again.");
+      setReferralStatus("idle");
+      return;
+    }
+
+    if (referrer.user_id === user.id) {
+      toast.error("You can’t use your own referral code!");
+      setReferralStatus("idle");
+      return;
+    }
+
+    // 3️⃣ Insert the referral (trigger gives both users credits)
+    const { error } = await supabase.from("referrals").insert([
+      {
+        referrer_id: referrer.user_id,
+        referred_id: user.id,
+      },
+    ]);
+
+    if (error) {
+      if (error.code === "23505") {
+        toast.error("You’ve already used a referral code before!");
+      } else {
+        console.error(error);
+        toast.error("Something went wrong. Please try again later.");
+      }
+      setReferralStatus("idle");
+      return;
+    }
+
+    // ✅ Success
+    toast.success(
+      "Referral applied successfully! You’ve earned bonus credits 🎉"
+    );
+    setReferralInput("");
+    setReferralStatus("success");
+  };
 
   /* ----------------------------------------------
      Refs for Auto-Resize
@@ -387,6 +476,22 @@ export default function ProfilePage() {
   ---------------------------------------------- */
   return (
     <div className="flex flex-col gap-6 md:p-20 p-4 w-full">
+      <div className="flex items-center gap-2 mb-6">
+        <Input
+          placeholder="Enter referral code"
+          value={referralInput}
+          onChange={(e) => setReferralInput(e.target.value.toUpperCase())}
+          className="max-w-xs"
+        />
+        <Button
+          onClick={handleReferralSubmit}
+          disabled={referralStatus === "loading" || !referralInput.trim()}
+          className="shrink-0"
+        >
+          {referralStatus === "loading" ? "Applying..." : "Apply"}
+        </Button>
+      </div>
+
       <h1 className="font-bold text-3xl mb-6">Profile</h1>
       <p className="text-sm text-muted-foreground mb-8">
         Manage your personal and relevant information here to include it in your

@@ -41,7 +41,7 @@ export function HomeButtons() {
 
       {/* Always show Explore Placements */}
       <button
-        onClick={() => router.push("/protected")}
+        onClick={() => router.push("/placements")}
         className="px-6 py-3 rounded-2xl border border-gray-300 font-medium text-gray-700 hover:bg-gray-100 transition"
       >
         Explore Placements

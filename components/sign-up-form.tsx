@@ -23,6 +23,13 @@ export function SignUpForm({
   const router = useRouter();
   const supabase = createClient();
 
+  const generateReferralCode = (length = 8) => {
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    return Array.from({ length }, () =>
+      chars.charAt(Math.floor(Math.random() * chars.length))
+    ).join("");
+  };
+
   // ---------- Step Control ----------
   const [step, setStep] = useState(1);
 
@@ -31,6 +38,7 @@ export function SignUpForm({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [repeatPassword, setRepeatPassword] = useState("");
+  const [referralInput, setReferralInput] = useState(""); // ✅ new field
 
   // ---------- Step 2 State ----------
   const [university, setUniversity] = useState("");
@@ -55,7 +63,6 @@ export function SignUpForm({
     setError(null);
     setIsLoading(true);
 
-    // Validate Step 1
     if (!nameRegex.test(fullName)) {
       setError(
         "Full name must include first and last name, each at least 2 letters."
@@ -79,14 +86,11 @@ export function SignUpForm({
     }
 
     try {
-      // Sign up the user
       const { data: signUpData, error: signUpError } =
         await supabase.auth.signUp({
           email,
           password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/protected`,
-          },
+          options: { emailRedirectTo: `${window.location.origin}/placements` },
         });
 
       if (signUpError) throw signUpError;
@@ -94,13 +98,10 @@ export function SignUpForm({
       const newUserId = signUpData?.user?.id;
       if (!newUserId) throw new Error("User ID not returned after signup");
 
-      // Save userId and move to step 2
       setUserId(newUserId);
       setStep(2);
-    } catch (err: unknown) {
-      setError(
-        err instanceof Error ? err.message : "An error occurred during signup."
-      );
+    } catch (err: any) {
+      setError(err.message || "An error occurred during signup.");
     } finally {
       setIsLoading(false);
     }
@@ -112,7 +113,6 @@ export function SignUpForm({
     setError(null);
     setIsLoading(true);
 
-    // Validate Step 2
     if (!yearRegex.test(yearOfStudy)) {
       setError("Year of study must be a positive number greater than 0.");
       setIsLoading(false);
@@ -131,9 +131,11 @@ export function SignUpForm({
       return;
     }
 
+    const referralCode = generateReferralCode();
+
     try {
-      // Insert academic info into individual_information
-      const { error: insertError } = await supabase
+      // Insert into individual_information
+      const { error: infoError } = await supabase
         .from("individual_information")
         .insert([
           {
@@ -142,19 +144,47 @@ export function SignUpForm({
             university,
             year_of_study: Number(yearOfStudy),
             degree,
+            referral: referralCode,
           },
         ]);
+      if (infoError) throw infoError;
 
-      if (insertError) throw insertError;
+      // Insert starting credits
+      const { error: creditsError } = await supabase
+        .from("user_credits")
+        .insert([
+          {
+            user_id: userId,
+            cover_letter_credits: 3,
+            resolve_ai_credits: 5,
+          },
+        ]);
+      if (creditsError) throw creditsError;
 
-      // Redirect after success
-      router.push("/auth/sign-up-success");
-    } catch (err: unknown) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "An error occurred while saving info."
-      );
+      // ✅ If referralInput exists, log it in referrals table
+      if (referralInput.trim()) {
+        // Find the referrer_id
+        const { data: referrerData } = await supabase
+          .from("individual_information")
+          .select("user_id")
+          .eq("referral", referralInput.trim())
+          .single();
+
+        if (referrerData?.user_id) {
+          await supabase.from("referrals").insert([
+            {
+              referrer_id: referrerData.user_id,
+              referred_id: userId,
+              referral_code: referralInput.trim(),
+            },
+          ]);
+        }
+      }
+
+      // Redirect
+      router.push(`/thank-you?referral=${referralCode}`);
+    } catch (err: any) {
+      setError(err.message || "An error occurred while saving info.");
     } finally {
       setIsLoading(false);
     }
@@ -169,13 +199,13 @@ export function SignUpForm({
             {step === 1 ? "Create your account" : "Tell us about your studies"}
           </CardDescription>
         </CardHeader>
+
         <CardContent>
           <form onSubmit={step === 1 ? handleStep1 : handleStep2}>
             <div className="flex flex-col gap-6">
               {/* -------- STEP 1 -------- */}
               {step === 1 && (
                 <>
-                  {/* Full Name */}
                   <div className="grid gap-2">
                     <Label htmlFor="full-name">Full Name</Label>
                     <Input
@@ -188,7 +218,6 @@ export function SignUpForm({
                     />
                   </div>
 
-                  {/* Email */}
                   <div className="grid gap-2">
                     <Label htmlFor="email">Email</Label>
                     <Input
@@ -201,7 +230,6 @@ export function SignUpForm({
                     />
                   </div>
 
-                  {/* Password */}
                   <div className="grid gap-2">
                     <Label htmlFor="password">Password</Label>
                     <Input
@@ -214,7 +242,6 @@ export function SignUpForm({
                     />
                   </div>
 
-                  {/* Repeat Password */}
                   <div className="grid gap-2">
                     <Label htmlFor="repeat-password">Repeat Password</Label>
                     <Input
@@ -225,13 +252,29 @@ export function SignUpForm({
                       onChange={(e) => setRepeatPassword(e.target.value)}
                     />
                   </div>
+
+                  {/* ✅ Referral Code (optional) */}
+                  <div className="grid gap-2">
+                    <Label htmlFor="referral-code">
+                      Referral Code{" "}
+                      <span className="text-muted-foreground">(optional)</span>
+                    </Label>
+                    <Input
+                      id="referral-code"
+                      type="text"
+                      placeholder="Enter referral code if you have one"
+                      value={referralInput}
+                      onChange={(e) =>
+                        setReferralInput(e.target.value.toUpperCase())
+                      }
+                    />
+                  </div>
                 </>
               )}
 
               {/* -------- STEP 2 -------- */}
               {step === 2 && (
                 <>
-                  {/* University */}
                   <div className="grid gap-2">
                     <Label htmlFor="university">University</Label>
                     <Input
@@ -244,7 +287,6 @@ export function SignUpForm({
                     />
                   </div>
 
-                  {/* Year of Study */}
                   <div className="grid gap-2">
                     <Label htmlFor="year-of-study">Year of Study</Label>
                     <Input
@@ -258,7 +300,6 @@ export function SignUpForm({
                     />
                   </div>
 
-                  {/* Degree */}
                   <div className="grid gap-2">
                     <Label htmlFor="degree">Degree</Label>
                     <Input
@@ -273,10 +314,8 @@ export function SignUpForm({
                 </>
               )}
 
-              {/* -------- ERROR MESSAGE -------- */}
               {error && <p className="text-sm text-red-500">{error}</p>}
 
-              {/* -------- PAGINATION BUTTONS -------- */}
               <div className="flex items-center justify-between mt-4">
                 {step === 2 && (
                   <Button
@@ -292,20 +331,19 @@ export function SignUpForm({
                   {isLoading ? "Processing..." : step === 1 ? "Next" : "Finish"}
                 </Button>
               </div>
-            </div>
 
-            {/* Footer Link */}
-            {step === 1 && (
-              <div className="mt-4 text-center text-sm">
-                Already have an account?{" "}
-                <Link
-                  href="/auth/login"
-                  className="underline underline-offset-4"
-                >
-                  Login
-                </Link>
-              </div>
-            )}
+              {step === 1 && (
+                <div className="mt-4 text-center text-sm">
+                  Already have an account?{" "}
+                  <Link
+                    href="/auth/login"
+                    className="underline underline-offset-4"
+                  >
+                    Login
+                  </Link>
+                </div>
+              )}
+            </div>
           </form>
         </CardContent>
       </Card>

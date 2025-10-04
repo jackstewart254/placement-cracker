@@ -224,7 +224,7 @@ export default function CVsAndLettersPage() {
 
   /* ---------- UI ---------- */
   return (
-    <div className="flex flex-col w-full h-[calc(100vh-64px)] max-h-[calc(100vh-80px)] overflow-hidden md:p-20 p-4">
+    <div className="flex flex-col w-full h-[calc(100vh-96px)] max-h-[calc(100vh-80px)] overflow-hidden md:p-20 p-4">
       {/* Inner container */}
       <div className="w-full flex-1 max-h-full space-y-8 flex flex-col overflow-hidden">
         <div className="flex items-center justify-between flex-wrap gap-4">
@@ -460,21 +460,46 @@ export default function CVsAndLettersPage() {
                     <div className="prose max-w-none space-y-4">
                       {selectedLetter.description
                         ? selectedLetter.description
+                            // 🚀 remove ```markdown and ``` fences
+                            .replace(/```[a-z]*\n?/gi, "")
+                            .replace(/```/g, "")
                             .split(/\n\s*\n/)
                             .map((block, idx) => {
                               const lines = block
                                 .split("\n")
                                 .map((l) => l.trim())
-                                .filter(Boolean);
+                                .filter((l) => l && l !== "---");
 
                               const hasBullets = lines.some((l) =>
                                 /^-\s+/.test(l)
                               );
-                              const boldify = (s: string) =>
-                                s.replace(
-                                  /\*\*(.*?)\*\*/g,
-                                  "<strong>$1</strong>"
+
+                              // 🔧 helper for inline formatting
+                              const formatMarkdownLine = (s: string) => {
+                                return (
+                                  s
+                                    // ## Heading → H3
+                                    .replace(
+                                      /^##\s+(.*)$/,
+                                      "<h3 class='font-semibold mt-3'>$1</h3>"
+                                    )
+                                    // # Heading → H2
+                                    .replace(
+                                      /^#\s+(.*)$/,
+                                      "<h2 class='font-bold mt-4'>$1</h2>"
+                                    )
+                                    // **Heading** alone on a line → H3
+                                    .replace(
+                                      /^\*\*(.*?)\*\*$/,
+                                      "<h3 class='font-semibold mt-3'>$1</h3>"
+                                    )
+                                    // inline **bold**
+                                    .replace(
+                                      /\*\*(.*?)\*\*/g,
+                                      "<strong>$1</strong>"
+                                    )
                                 );
+                              };
 
                               if (hasBullets) {
                                 const headingLines = lines.filter(
@@ -490,9 +515,9 @@ export default function CVsAndLettersPage() {
                                       <div
                                         className="text-sm leading-relaxed"
                                         dangerouslySetInnerHTML={{
-                                          __html: boldify(
-                                            headingLines.join("<br/>")
-                                          ),
+                                          __html: headingLines
+                                            .map(formatMarkdownLine)
+                                            .join("<br/>"),
                                         }}
                                       />
                                     )}
@@ -501,7 +526,7 @@ export default function CVsAndLettersPage() {
                                         <li
                                           key={i}
                                           dangerouslySetInnerHTML={{
-                                            __html: boldify(li),
+                                            __html: formatMarkdownLine(li),
                                           }}
                                         />
                                       ))}
@@ -509,7 +534,9 @@ export default function CVsAndLettersPage() {
                                   </div>
                                 );
                               } else {
-                                const html = boldify(lines.join("\n"));
+                                const html = lines
+                                  .map(formatMarkdownLine)
+                                  .join("<br/>");
                                 return (
                                   <div
                                     key={idx}

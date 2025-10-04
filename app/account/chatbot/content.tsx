@@ -439,29 +439,36 @@ export default function Chatbot() {
      UI
   -------------------------- */
   return (
-    <div className="flex h-[calc(100vh-64px)] p-20">
+    <div className="flex h-[calc(100vh-96px)]">
       {/* Left Sidebar - Chat Sessions */}
-      <div className="w-72 border-r h-full pr-6 flex flex-col">
-        <h2 className="text-lg font-semibold mb-4">Chat Sessions</h2>
+      <div className="w-72 border-r h-full p-4 gap-4 flex flex-col">
+        <h2 className="text-lg font-semibold">Chat Sessions</h2>
+        {/* <Button>New query</Button> */}
 
         <div className="space-y-2 flex-1 overflow-y-auto">
           {sessions.length > 0 ? (
             sessions.map((session) => (
               <Card
                 key={session.id}
-                className={`p-4 cursor-pointer rounded-lg transition-all duration-200 ${
+                onClick={() => handleSelectSession(session)}
+                className={`relative cursor-pointer rounded-lg p-[1px] transition-all duration-300 ${
                   selectedSession?.id === session.id
-                    ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg"
+                    ? "bg-gradient-to-r from-blue-500 to-purple-600 shadow-lg"
                     : "hover:bg-muted"
                 }`}
-                onClick={() => handleSelectSession(session)}
               >
-                <p className="font-medium text-wrap">
-                  {session.jobs.job_title}
-                </p>
-                <p className="text-xs opacity-80 truncate">
-                  {session.jobs.companies.name}
-                </p>
+                <div className="w-full h-full flex flex-col bg-background rounded-md p-4 transition-colors duration-300">
+                  <p className="font-medium text-wrap">
+                    {session.jobs.job_title}
+                  </p>
+                  <p
+                    className={`text-xs truncate
+                        text-muted-foreground opacity-80
+                    `}
+                  >
+                    {session.jobs.companies.name}
+                  </p>
+                </div>
               </Card>
             ))
           ) : (
@@ -471,7 +478,7 @@ export default function Chatbot() {
       </div>
 
       {/* Main Chat Area */}
-      <div className="flex-1 pl-6 flex flex-col h-full">
+      <div className="flex-1 p-4 flex flex-col h-full">
         {step === "select" && (
           <div className="flex items-center justify-center h-full">
             <div className="max-w-xl text-center space-y-6">
@@ -564,14 +571,6 @@ export default function Chatbot() {
                             }
                           >
                             <Copy className="h-4 w-4 mr-1" /> Copy
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="rounded-lg"
-                            onClick={() => handleOpenRegenerate(q.id)}
-                          >
-                            <RefreshCw className="h-4 w-4 mr-1" /> Regenerate
                           </Button>
                         </div>
                       </div>

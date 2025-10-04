@@ -34,6 +34,49 @@ export async function POST(req: Request) {
     }
 
     /* ------------------------------
+       Credit Check
+    ------------------------------ */
+    const { data: credits, error: creditsError } = await supabase
+      .from("user_credits")
+      .select("resolve_ai_credits")
+      .eq("user_id", user.id)
+      .single();
+
+    if (creditsError || !credits) {
+      console.error("Error fetching credits:", creditsError);
+      return NextResponse.json(
+        { error: "Could not fetch your credits. Please try again later." },
+        { status: 500 }
+      );
+    }
+
+    if (credits.resolve_ai_credits <= 0) {
+      return NextResponse.json(
+        {
+          error:
+            "Sorry, you are out of credits. Share your referral code and get friends to sign up for more ResolveAI questions!",
+        },
+        { status: 403 }
+      );
+    }
+
+    // ✅ Decrement one credit before generation
+    const { error: updateCreditsError } = await supabase
+      .from("user_credits")
+      .update({
+        resolve_ai_credits: credits.resolve_ai_credits - 1,
+      })
+      .eq("user_id", user.id);
+
+    if (updateCreditsError) {
+      console.error("Error updating credits:", updateCreditsError);
+      return NextResponse.json(
+        { error: "Unable to update your credits. Please try again later." },
+        { status: 500 }
+      );
+    }
+
+    /* ------------------------------
        Fetch Job & Company
     ------------------------------ */
     const { data: jobData, error: jobError } = await supabase
@@ -112,66 +155,12 @@ Your response should:
 - Be structured clearly and professionally, with a natural and authentic tone.
     `;
 
-    console.log(prompt)
-    
-
-
     /* ------------------------------
        Tokenize Prompt
     ------------------------------ */
     const inputTokens = encode(prompt);
     const inputSize = prompt.length;
-    const tokenSize = inputTokens.length; // ✅ Accurate token count
-
-    /* ------------------------------
-       Daily Limit Check
-    ------------------------------ */
-    const { data: sessionsData, error: sessionsError } = await supabase
-      .from("chat_sessions")
-      .select("id")
-      .eq("user_id", user.id);
-
-    if (sessionsError || !sessionsData) {
-      console.error("Error fetching chat sessions:", sessionsError);
-      return NextResponse.json(
-        { error: "Could not verify daily usage limit (sessions)." },
-        { status: 500 }
-      );
-    }
-
-    const sessionIds = sessionsData.map((s) => s.id);
-
-    if (sessionIds.length > 0) {
-      const { data: inputsData, error: inputsError } = await supabase
-        .from("chat_inputs")
-        .select("id, created_at, session_id")
-        .in("session_id", sessionIds);
-
-      if (inputsError || !inputsData) {
-        console.error("Error fetching chat inputs:", inputsError);
-        return NextResponse.json(
-          { error: "Could not verify daily usage limit (inputs)." },
-          { status: 500 }
-        );
-      }
-
-      const now = new Date();
-      const startOfDayUtc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-      const endOfDayUtc = new Date(startOfDayUtc);
-      endOfDayUtc.setUTCDate(endOfDayUtc.getUTCDate() + 1);
-
-      const todaysInputs = inputsData.filter((input) => {
-        const createdAt = new Date(input.created_at);
-        return createdAt >= startOfDayUtc && createdAt < endOfDayUtc;
-      });
-
-      if (todaysInputs.length >= 20) {
-        return NextResponse.json(
-          { error: "Daily generation limit reached. Please try again tomorrow." },
-          { status: 403 }
-        );
-      }
-    }
+    const tokenSize = inputTokens.length;
 
     /* ------------------------------
        Insert Input Record
@@ -184,7 +173,7 @@ Your response should:
           question,
           comment: comment || null,
           input_size: inputSize,
-          token_size: tokenSize, // ✅ Accurate tokens
+          token_size: tokenSize,
           word_limit: word_limit || null,
         },
       ])
@@ -214,7 +203,6 @@ Your response should:
       ],
     });
 
-    
     const answer =
       aiResponse.choices[0]?.message?.content?.trim() ||
       "No answer generated.";
@@ -223,7 +211,7 @@ Your response should:
        Tokenize Output
     ------------------------------ */
     const outputTokens = encode(answer);
-    const outputTokenSize = outputTokens.length; // ✅ Accurate output tokens
+    const outputTokenSize = outputTokens.length;
 
     /* ------------------------------
        Insert Output Record
@@ -232,7 +220,7 @@ Your response should:
       {
         id: inputRecord.id, // FK to chat_inputs.id
         answer,
-        output_tokens: outputTokenSize, // ✅ Save real token count
+        output_tokens: outputTokenSize,
       },
     ]);
 

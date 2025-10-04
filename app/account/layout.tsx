@@ -4,6 +4,7 @@ import { ThemeProvider } from "next-themes";
 import Link from "next/link";
 import { Toaster } from "sonner";
 import { AuthButton } from "@/components/auth-button";
+import { ReferralLabel } from "@/components/referralLabel";
 
 export default function ProtectedLayout({
   children,
@@ -13,26 +14,29 @@ export default function ProtectedLayout({
   return (
     <main className="min-h-screen flex flex-col">
       {/* Header / Navigation */}
-      <nav className="w-full border-b border-b-foreground/10 h-16 flex items-center justify-center">
-        <div className="w-full flex justify-between items-center px-5 text-sm">
-          {/* Left Section: Logo */}
-          <div className="flex gap-5 items-center font-semibold">
-            <Link
-              href="/"
-              className="bg-gradient-to-r from-blue-500 to-purple-600 bg-clip-text text-transparent"
-            >
-              Placement Cracker
-            </Link>
-          </div>
+      <div className="flex w-full flex-col h-24">
+        <nav className="w-full border-b border-b-foreground/10 h-16  flex items-center justify-center">
+          <div className="w-full flex justify-between items-center px-5 text-sm">
+            {/* Left Section: Logo */}
+            <div className="flex gap-5 items-center font-semibold">
+              <Link
+                href="/"
+                className="bg-gradient-to-r from-blue-500 to-purple-600 bg-clip-text text-transparent"
+              >
+                Placement Cracker
+              </Link>
+            </div>
 
-          <div className="flex items-center gap-3">
-            {!hasEnvVars && <EnvVarWarning />}
-            <AuthButton />
+            <div className="flex items-center gap-3">
+              {!hasEnvVars && <EnvVarWarning />}
+              <AuthButton />
+            </div>
           </div>
-
-          {/* Right Section: Auth + Env Warnings */}
+        </nav>
+        <div className="h-12">
+          <ReferralLabel />
         </div>
-      </nav>
+      </div>
 
       {/* Main Content Area */}
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem>

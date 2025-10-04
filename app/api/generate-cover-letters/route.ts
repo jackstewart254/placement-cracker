@@ -20,31 +20,45 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "No jobs provided" }, { status: 400 });
   }
 
-  // 3. Rate limit (15 per day)
-  const now = new Date();
-  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-  const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString();
-
-  const { data: requestsToday, error: requestsError } = await supabase
-    .from("requests")
-    .select("id")
+  // 3. Check credits
+  const { data: credits, error: creditsError } = await supabase
+    .from("user_credits")
+    .select("cover_letter_credits")
     .eq("user_id", user_id)
-    .gte("created_at", startOfDay)
-    .lt("created_at", endOfDay);
+    .single();
 
-  if (requestsError) {
-    console.error("Error fetching today's requests:", requestsError.message);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
-  }
-
-  if (requestsToday && requestsToday.length >= 15) {
+  if (creditsError || !credits) {
     return NextResponse.json(
-      { error: "Rate limit reached, wait until midnight to start again." },
-      { status: 429 }
+      { error: "Could not fetch your credits. Please try again later." },
+      { status: 500 }
     );
   }
 
-  // 4. Individual info
+  if (credits.cover_letter_credits <= 0) {
+    return NextResponse.json(
+      {
+        error:
+          "Sorry, you are out of credits. Share your referral code and get friends to sign up for more cover letter generations!",
+      },
+      { status: 403 }
+    );
+  }
+
+  // 4. Decrement credits immediately
+  const { error: updateCreditsError } = await supabase
+    .from("user_credits")
+    .update({ cover_letter_credits: credits.cover_letter_credits - 1 })
+    .eq("user_id", user_id);
+
+  if (updateCreditsError) {
+    console.error("Error updating credits:", updateCreditsError.message);
+    return NextResponse.json(
+      { error: "Unable to update your credits. Please try again later." },
+      { status: 500 }
+    );
+  }
+
+  // 5. Individual info
   const { data: individualInfo, error: individualError } = await supabase
     .from("individual_information")
     .select("*")
@@ -58,7 +72,7 @@ export async function POST(req: Request) {
     );
   }
 
-  // 5. Extended user info
+  // 6. Extended user info
   const { data: userInfo, error: userInfoError } = await supabase
     .from("user_information")
     .select("*")
@@ -77,9 +91,12 @@ export async function POST(req: Request) {
     try {
       const data = JSON.parse(raw || "[]");
       if (!Array.isArray(data) || data.length === 0) return "None provided";
-      return data.map((item: { title: string; description: string }) =>
-        `• ${item.title} - ${item.description}`
-      ).join("\n");
+      return data
+        .map(
+          (item: { title: string; description: string }) =>
+            `• ${item.title} - ${item.description}`
+        )
+        .join("\n");
     } catch {
       return "None provided";
     }
@@ -89,22 +106,29 @@ export async function POST(req: Request) {
     try {
       const data = JSON.parse(raw || "[]");
       if (!Array.isArray(data) || data.length === 0) return "None provided";
-      return data.map((item: { title: string; description: string }) =>
-        `• ${item.title} - ${item.description}`
-      ).join("\n");
+      return data
+        .map(
+          (item: { title: string; description: string }) =>
+            `• ${item.title} - ${item.description}`
+        )
+        .join("\n");
     } catch {
       return "None provided";
     }
   };
 
-  const formattedExtraCurriculars = formatExtraCurriculars(userInfo.extra_curriculars);
-  const formattedPersonalProjects = formatPersonalProjects(userInfo.personal_projects);
+  const formattedExtraCurriculars = formatExtraCurriculars(
+    userInfo.extra_curriculars
+  );
+  const formattedPersonalProjects = formatPersonalProjects(
+    userInfo.personal_projects
+  );
 
-  // 6. Init OpenAI
+  // 7. Init OpenAI
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   const results = [];
 
-  // 7. Process jobs
+  // 8. Process jobs
   for (const job of jobs) {
     const { data: jobData, error: jobError } = await supabase
       .from("jobs")
@@ -128,7 +152,7 @@ export async function POST(req: Request) {
       continue;
     }
 
-    // 8. Build AI prompt
+    // 9. Build AI prompt
     const aiPrompt = `
 You are an expert career assistant. Write a personalized, professional cover letter using the provided information.
 
@@ -204,7 +228,7 @@ Create a structured cover letter with **four paragraphs**, following this exact 
     // ✅ Accurate token count for output
     const tokenOutput = encode(generatedLetter).length;
 
-    // 14. Insert into requests
+    // 13. Insert into requests (for analytics/logging)
     const { error: requestInsertError } = await supabase
       .from("requests")
       .insert([
@@ -219,11 +243,14 @@ Create a structured cover letter with **four paragraphs**, following this exact 
       ]);
 
     if (requestInsertError) {
-      console.error("Error inserting into requests:", requestInsertError.message);
+      console.error(
+        "Error inserting into requests:",
+        requestInsertError.message
+      );
       continue;
     }
 
-    // 15. Save cover letter
+    // 14. Save cover letter
     const { data: insertedCoverLetter, error: insertError } = await supabase
       .from("cover_letters")
       .insert([
@@ -241,7 +268,7 @@ Create a structured cover letter with **four paragraphs**, following this exact 
       continue;
     }
 
-    // 16. Upsert into tracking
+    // 15. Upsert into tracking
     const { error: trackingError } = await supabase
       .from("tracking")
       .upsert(
